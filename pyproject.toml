@@ -14,6 +14,7 @@
 # ----------------------
 #   poetry install                      core runtime only
 #   poetry install --with dev           + pytest, ruff, ty, pre-commit
+#   poetry install --with docs          + mkdocs, to build the docs site
 #
 # Run tests
 # ---------
@@ -85,6 +86,21 @@ ty = ">=0.0.44"
 # Tool configuration
 # ---------------------------------------------------------------------------
 hypothesis = ">=6.100"
+
+# Docs site (Poetry group): `poetry run mkdocs serve`, or `mkdocs build --strict`.
+[tool.poetry.group.docs]
+optional = true
+
+[tool.poetry.group.docs.dependencies]
+# mkdocs is capped below 2: 2.0 removes the plugin system, and this site
+# depends on two plugins (search, mkdocstrings).
+mkdocs = ">=1.6,<2"
+mkdocs-material = ">=9.5"
+mkdocstrings = { version = ">=0.26", extras = ["python"] }
+# 12.2 and 12.3 break mkdocstrings 1.0.6 (Highlight() now needs `md`);
+# 12.1 is what vault_kg's lock builds with.
+pymdown-extensions = ">=10,<12.2"
+
 [tool.ruff]
 line-length    = 100
 target-version = "py310"

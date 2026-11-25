@@ -2,7 +2,8 @@
 
 | To | Run |
 |----|-----|
-| See the map in a browser | `modelmap map --open` |
+| See the map in a browser, with Remove buttons | `modelmap serve` |
+| Save the map as a file that works offline | `modelmap map --open` |
 | See totals by store | `modelmap scan` |
 | List every model, largest first | `modelmap list` |
 | List by format, or include datasets and caches | `modelmap list --group format`, `modelmap list --all` |
@@ -20,7 +21,8 @@
 
 On the map: click a tile to open it down to its files; Escape goes back
 up. The panel beside the map shows each model's paths and its
-`modelmap rm` command.
+`modelmap rm` command; under `modelmap serve` it also has a Remove
+button, which shows what will go and asks first.
 
 Names: Hugging Face `hf`, Ollama `ollama`, oMLX `omlx`, LM Studio
 `lmstudio`, llama.cpp `llamacpp`, GPT4All `gpt4all`, Jan `jan`, Whisper

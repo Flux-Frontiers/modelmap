@@ -54,7 +54,7 @@ def test_every_store_is_in_the_guide_and_the_cheat_sheet() -> None:
 
 
 @pytest.mark.parametrize(
-    "name", ["README.md", "docs/guide.md", "docs/cli.md", "docs/cheatsheet.md"]
+    "name", ["README.md", "docs/index.md", "docs/guide.md", "docs/cli.md", "docs/cheatsheet.md"]
 )
 def test_links_and_images_point_at_files_that_exist(name: str) -> None:
     page = ROOT / name

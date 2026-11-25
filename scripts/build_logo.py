@@ -7,8 +7,8 @@ and outlined lettering come from the Art Techno brand build, so the SVGs
 render the same everywhere.
 
 Writes ``assets/modelmap_logo``, ``_icon`` and ``_banner`` as SVG and PNG,
-``assets/favicon.png``, and ``src/modelmap/icon.svg``, which the map page
-embeds.
+``assets/favicon.png``, ``docs/assets/logo.png``, ``favicon.png`` and
+``banner.png`` for the docs site, and ``src/modelmap/icon.svg``, which the map page embeds.
 
 Usage::
 
@@ -361,6 +361,11 @@ def main() -> None:
         icon_png = Path(tmp) / "icon.png"
         render(assets / "modelmap_icon.svg", icon_png, 1024, 1024)
         resized(icon_png, assets / "favicon.png", 32)
+        docs = ROOT / "docs" / "assets"
+        docs.mkdir(parents=True, exist_ok=True)
+        resized(icon_png, docs / "logo.png", 256)
+        resized(icon_png, docs / "favicon.png", 32)
+        shutil.copyfile(assets / "modelmap_banner.png", docs / "banner.png")
     # The page embeds the icon, so it ships inside the package.
     shutil.copyfile(assets / "modelmap_icon.svg", ROOT / "src" / "modelmap" / "icon.svg")
 

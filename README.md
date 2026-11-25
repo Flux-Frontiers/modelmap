@@ -24,21 +24,20 @@ draws everything as a map you can open down to the individual files.
 
 <img src="https://raw.githubusercontent.com/Flux-Frontiers/modelmap/main/assets/map.png" alt="The map: one block per store, one tile per model, sized by space used" width="760">
 
-Status: pre-alpha, not yet released. It runs on macOS and Linux with
-Python 3.10 or later and needs nothing beyond the standard library.
+It runs on macOS and Linux with Python 3.10 or later and needs nothing
+beyond the standard library.
 
 ## Install
 
-From a clone:
-
 ```bash
-pip install .
+pipx install modelmap      # or: uv tool install modelmap, or: pip install modelmap
 ```
 
 ## Use
 
 ```bash
-modelmap map --open             # the map, opened in your browser
+modelmap serve                  # the map in your browser, with a Remove button per model
+modelmap map --open             # the map as a file that works offline
 modelmap scan                   # totals by store
 modelmap list                   # every model, largest first
 modelmap providers              # where each store is looked for
@@ -47,7 +46,8 @@ modelmap rm ollama:qwen3:4b     # remove a model, after showing what goes and as
 
 On the map, click a tile to open the model; the square is redrawn as its
 files, with each file's path and the `modelmap rm` command beside it.
-Escape goes back up.
+Escape goes back up. Under `modelmap serve`, the panel's Remove button
+does what `modelmap rm` does: it shows what will go and asks first.
 
 `modelmap rm` removes Ollama models with `ollama rm`, Hugging Face cache
 repositories with `hf cache rm`, and moves anything else to the Trash. It
@@ -63,16 +63,21 @@ modelmap map --from-json inventory.json --open     # on yours
 
 ## Documentation
 
-- [Guide](https://github.com/Flux-Frontiers/modelmap/blob/main/docs/guide.md): what is scanned, how sizes are counted, the map,
-  removing models, and the limits.
-- [Command reference](https://github.com/Flux-Frontiers/modelmap/blob/main/docs/cli.md): every command and option.
-- [Cheat sheet](https://github.com/Flux-Frontiers/modelmap/blob/main/docs/cheatsheet.md): one page.
+The documentation site is at
+[flux-frontiers.github.io/modelmap](https://flux-frontiers.github.io/modelmap/):
+
+- [Guide](https://flux-frontiers.github.io/modelmap/guide/): what is scanned, how sizes are counted, the map,
+  serving it, removing models, and the limits.
+- [CLI reference](https://flux-frontiers.github.io/modelmap/cli/): every command and option.
+- [Cheat sheet](https://flux-frontiers.github.io/modelmap/cheatsheet/): one page.
+- [API reference](https://flux-frontiers.github.io/modelmap/api/scanner/): the Python modules.
 
 ## Development
 
 ```bash
-poetry install --with dev
+poetry install --with dev,docs
 .venv/bin/pytest
+poetry run mkdocs serve        # the docs site at http://127.0.0.1:8000
 ```
 
 ## Citation

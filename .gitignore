@@ -23,3 +23,6 @@ uv.lock
 
 # Hypothesis example database.
 .hypothesis/
+
+# Output of `mkdocs build`.
+/site/

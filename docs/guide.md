@@ -89,10 +89,44 @@ found, in proportion to size, with one block per store.
 ![A model opened down to its files](https://raw.githubusercontent.com/Flux-Frontiers/modelmap/main/assets/map-files.png)
 
 For each model the panel shows its location, which other entries use the
-same files, and the `modelmap rm` command that removes it. The page itself
-deletes nothing.
+same files, and the `modelmap rm` command that removes it. The file that
+`map` writes deletes nothing; to remove from the page, serve it (next
+section).
 
 `modelmap map --svg` writes a static picture of the top level instead.
+
+## Serving the map
+
+`modelmap serve` scans, then serves the same page from your machine and
+opens it in a browser. It adds a Rescan button and, in each model's
+panel, a Remove button. It runs until you press Ctrl-C.
+
+```bash
+modelmap serve                      # scan, serve and open the page
+modelmap serve --read-only          # the page without Remove buttons
+modelmap serve --no-open --port 8765
+```
+
+Remove does what `modelmap rm` does, through the same code. It opens a
+dialog listing the command or every path that would go, any Ollama tags
+removed with the model, and whether the removal can be undone from the
+Trash. Nothing happens until you press Remove in the dialog; Cancel has
+the focus, so Enter does not confirm. When you confirm, the server scans
+again and plans again. If what would go has changed since the dialog
+opened, it removes nothing and shows the new list. After a removal the
+page is redrawn from a new scan, at the model's group.
+
+A Remove button appears only where `rm` would act; for a cache or a file
+another model uses, the panel says why there is none. One removal runs at
+a time.
+
+The server answers only on `127.0.0.1`, only to requests that carry the
+token in the address it prints, and only to its own page: a page on
+another site cannot read the map or ask it to remove anything. Keep the
+address to yourself while the server runs.
+
+`modelmap serve --from-json FILE` serves an inventory read-only: it
+describes another machine, or this one at another time.
 
 ## Removing models
 

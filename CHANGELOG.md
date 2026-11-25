@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The interactive map.** `modelmap map` writes one page that works
+  offline. Clicking a tile opens the model and redraws the square as its
+  individual files; clicking a store shows only that store. The page can
+  group by store, format, family or kind, filter by name, and lists every
+  entry with a problem. It follows the light or dark setting and can be
+  used from the keyboard. `--svg` writes the static picture, `--disk`
+  sizes by space on disk, `--open` opens the result.
+- **Scanner.** A file named on the command line is no longer listed a
+  second time by the home sweep.
+- **Files of each record.** Every record now lists its files: real path,
+  size, what the file is within the model, and every other record that
+  uses it. Hugging Face blobs are named from the current snapshot, and a
+  blob no longer in it is marked. Ollama blobs are named by layer.
+- **`modelmap rm`.** Removes models, after listing every file or command
+  and asking (`--dry-run` lists only; `--yes` skips the question). Ollama
+  models go through `ollama rm`, with every tag of the same weights;
+  Hugging Face cache repositories through `hf cache rm`; everything else
+  moves to the Trash. Caches, unreferenced files, copies of an Ollama
+  store and models whose files another model uses are refused. The map
+  shows the `modelmap rm` command for each model.
 - **Treemap layout.** `modelmap.treemap` divides a rectangle among sizes
   with the squarified algorithm of Bruls, Huizing and van Wijk. Areas are
   exact shares of the total; equal sizes are ordered by name, so a layout

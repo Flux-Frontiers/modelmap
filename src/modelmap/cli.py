@@ -2,20 +2,28 @@
 
 ``modelmap scan``       scan and print a summary, or the inventory as JSON
 ``modelmap list``       scan, or read an inventory, and print every model
+``modelmap map``        scan, or read an inventory, and write the treemap
 ``modelmap providers``  show where each store is looked for on this machine
+``modelmap rm``         remove models, after showing what goes and asking
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import sys
+import webbrowser
 from collections.abc import Callable, Iterable, Sequence
+from pathlib import Path
 from typing import Any, TextIO
 
 from modelmap import __version__
 from modelmap.providers import PROVIDERS
 from modelmap.providers.base import Context
 from modelmap.records import ModelRecord, Scan
+from modelmap.removal import TRASH_NOTE, Plan, execute, find, plan
+from modelmap.render_html import render_html
+from modelmap.render_svg import DISPLAY_NAMES, render_svg
 from modelmap.scanner import Options, redact, scan
 from modelmap.units import format_count, format_size, parse_size
 
@@ -208,7 +216,35 @@ def _parser() -> argparse.ArgumentParser:
         "--all", action="store_true", help="include datasets, caches and other entries"
     )
 
+    map_cmd = commands.add_parser("map", parents=[what], help="write the treemap")
+    map_cmd.add_argument(
+        "--from-json", metavar="FILE", help="read an inventory instead of scanning"
+    )
+    map_cmd.add_argument(
+        "-o", "--output", metavar="FILE", help="file to write (default modelmap.html or .svg)"
+    )
+    map_cmd.add_argument(
+        "--svg", action="store_true", help="write a static picture, not the interactive page"
+    )
+    map_cmd.add_argument(
+        "--disk", action="store_true", help="size tiles by space allocated on disk, not file size"
+    )
+    map_cmd.add_argument("--open", action="store_true", help="open the result in a browser")
+
     commands.add_parser("providers", help="show where each store is looked for")
+
+    rm_cmd = commands.add_parser(
+        "rm",
+        help="remove models, after showing what goes and asking",
+        description=(
+            "Remove models. Each TARGET is provider:name as `modelmap list` shows it, an "
+            "Ollama tag, or a path. Ollama models and Hugging Face cache repositories are "
+            "removed with the tool's own command; anything else moves to the Trash."
+        ),
+    )
+    rm_cmd.add_argument("targets", nargs="+", metavar="TARGET", help="what to remove")
+    rm_cmd.add_argument("--dry-run", action="store_true", help="show what would go; remove nothing")
+    rm_cmd.add_argument("-y", "--yes", action="store_true", help="do not ask before removing")
     return parser
 
 
@@ -226,14 +262,131 @@ def _scan(args: argparse.Namespace, ctx: Context) -> Scan:
     return redact(result, ctx.home) if args.redact else result
 
 
+def _write_map(result: Scan, args: argparse.Namespace, out: TextIO) -> None:
+    text = (
+        render_svg(result, use_disk=args.disk)
+        if args.svg
+        else render_html(result, use_disk=args.disk)
+    )
+    path = os.path.abspath(args.output or ("modelmap.svg" if args.svg else "modelmap.html"))
+    # Names that are not valid UTF-8 were replaced when the text was built.
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(text)
+    print(f"Wrote {_text(path)}", file=out)
+    if args.open:
+        webbrowser.open(Path(path).as_uri())
+
+
+def _describe_plan(step: Plan, out: TextIO) -> None:
+    record = step.record
+    store = DISPLAY_NAMES.get(record.provider, record.provider)
+    print(f"  {_text(record.name)} ({store}, {format_size(record.size_bytes)})", file=out)
+    if step.action == "trash":
+        for path in step.paths:  # all of them: this is what the question asks about
+            print(f"    {_text(path)}", file=out)
+    else:
+        print(f"    {_text(record.path)}", file=out)
+    print(f"    {_text(step.note)}", file=out)
+
+
+def _remove(
+    args: argparse.Namespace, ctx: Context, out: TextIO, ask: Callable[[str], str] | None
+) -> int:
+    """The ``rm`` command. Nothing is removed that was not listed first."""
+    paths = []
+    for target in args.targets:
+        found = os.path.expanduser(target)
+        if os.path.lexists(found):
+            # A hub repository is read with its cache, which names it.
+            prefix = os.path.basename(found.rstrip(os.sep)).partition("--")[0]
+            hub_repo = prefix in ("models", "datasets", "spaces") and "--" in found
+            paths.append(os.path.dirname(found.rstrip(os.sep)) if hub_repo else found)
+    result = scan(ctx, Options(paths=paths, sweep=True))
+    chosen: list[ModelRecord] = []
+    for target in args.targets:
+        matches = find(result.records, target)
+        if not matches:
+            print(f"No model matches {_text(target)}. `modelmap list` shows the names.", file=out)
+            return 1
+        if len(matches) > 1:
+            print(
+                f"{_text(target)} matches {len(matches)} entries; name one by its path:", file=out
+            )
+            for match in matches:
+                print(f"  {_text(match.path)}", file=out)
+            return 1
+        if matches[0] not in chosen:
+            chosen.append(matches[0])
+
+    live = [r.resolved for r in result.roots if r.provider == "ollama" and r.source != "layout"]
+    steps = [plan(record, live, env=ctx.env, home=str(ctx.home)) for record in chosen]
+    if args.yes:
+        # A tag with settings of its own goes only if it was asked for by name.
+        typed = set(args.targets)
+        for n, step in enumerate(steps):
+            unnamed = [tag for tag in step.variants if tag not in typed]
+            if unnamed:
+                steps[n] = Plan(
+                    step.record,
+                    "refuse",
+                    f"{step.note} With --yes, name each of these tags to remove it: "
+                    f"{', '.join(unnamed)}.",
+                )
+    refused = [step for step in steps if step.action == "refuse"]
+    total = sum(step.record.size_bytes for step in steps)
+    heading = "Would remove" if args.dry_run else "Will remove"
+    count = len(steps)
+    print(
+        f"{heading} {count} {'entry' if count == 1 else 'entries'}, {format_size(total)}:", file=out
+    )
+    for step in steps:
+        print(file=out)
+        _describe_plan(step, out)
+    if refused:
+        print(f"\nNothing was removed: {len(refused)} of these cannot be removed.", file=out)
+        return 1
+    if args.dry_run:
+        print("\nNothing was removed (--dry-run).", file=out)
+        return 0
+    if not args.yes:
+        if ask is None:
+            if not sys.stdin.isatty():
+                print("\nNothing was removed: add --yes to remove without asking.", file=out)
+                return 1
+            ask = input
+        print(file=out)
+        out.flush()
+        if ask("Remove? [y/N] ").strip().lower() not in ("y", "yes"):
+            print("Nothing was removed.", file=out)
+            return 1
+
+    failed = 0
+    for step in steps:
+        done, problem = execute(step, ctx.env)
+        name = _text(step.record.name)
+        if done:
+            print(f"Removed {name}.", file=out)
+        else:
+            failed += 1
+            print(f"Could not remove {name}: {_text(problem)}", file=out)
+    if any(step.action == "trash" for step in steps) and failed < count:
+        print(TRASH_NOTE, file=out)
+    return 1 if failed else 0
+
+
 def main(
-    argv: Sequence[str] | None = None, ctx: Context | None = None, out: TextIO | None = None
+    argv: Sequence[str] | None = None,
+    ctx: Context | None = None,
+    out: TextIO | None = None,
+    ask: Callable[[str], str] | None = None,
 ) -> int:
     """Run the command line.
 
     :param argv: Arguments; ``sys.argv[1:]`` by default.
     :param ctx: The machine to scan; the running one by default.
     :param out: Where to print; standard output by default.
+    :param ask: Asks the person a question and returns the answer; the
+        terminal by default, and only when standard input is one.
     :return: Exit status.
     """
     parser = _parser()
@@ -243,9 +396,16 @@ def main(
     if args.command == "providers":
         _print_providers(ctx, out)
         return 0
+    if args.command == "rm":
+        return _remove(args, ctx, out, ask)
     if args.no_defaults and not args.paths and not getattr(args, "from_json", None):
         parser.error("--no-defaults needs at least one PATH to scan")
-    if args.command == "list" and args.from_json:
+    if args.command in ("list", "map") and args.from_json:
+        # An inventory is read as it is. It does not say what the home
+        # directory was, so it cannot be redacted here, only when it is made.
+        scanning = args.paths or args.only or args.no_sweep or args.exclude or args.redact
+        if scanning or args.max_depth is not None:
+            parser.error("--from-json reads an inventory as it is: give no PATH or scan options")
         try:
             with open(args.from_json, encoding="utf-8") as fh:
                 result = Scan.from_json(fh.read())
@@ -256,6 +416,8 @@ def main(
 
     if args.command == "list":
         _print_list(result, args, out)
+    elif args.command == "map":
+        _write_map(result, args, out)
     elif args.json:
         print(result.to_json(), file=out)
     else:

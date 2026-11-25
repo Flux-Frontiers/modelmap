@@ -133,6 +133,58 @@ def _css(groups: list[Group]) -> list[str]:
     ]
 
 
+def label_markup(
+    r: Rect, clip_id: str, ink: str, name: str, detail: str, extra: str = "", tag: str = ""
+) -> list[str]:
+    """The label of a tile, clipped to it; nothing if no line fits.
+
+    :param r: The tile.
+    :param clip_id: Document-unique id for the clip path.
+    :param ink: Attribute text that sets the label color, such as
+        ``class="ink-hf"``.
+    :param name: First line, in bold.
+    :param detail: Second line.
+    :param extra: Third line.
+    :param tag: A small heading above the name, such as the group's name.
+    """
+    font = 16 if r.w >= 220 and r.h >= 96 else 13 if r.w >= 110 and r.h >= 44 else 11
+    width, room = r.w - 2 * _PAD, r.h - 2 * _PAD + 2
+    lines: list[tuple[str, str, float, float]] = []  # class, text, font size, line height
+    if tag and r.w >= 96:
+        fitted_tag = _fit(tag, width, _TAG_FONT * 1.15)
+        if fitted_tag and _TAG_LINE <= room:
+            lines.append(("tag", fitted_tag, _TAG_FONT, _TAG_LINE))
+    used = sum(line[3] for line in lines)
+    for css, text, size in (
+        ("name", name, font),
+        ("", detail, font * 0.88),
+        ("", extra, font * 0.88),
+    ):
+        fitted = _fit(text, width, size) if text else ""
+        if not fitted or used + size * 1.3 > room:
+            break  # a detail never appears without the lines above it
+        lines.append((css, fitted, size, size * 1.3))
+        used += size * 1.3
+    if not lines:
+        return []
+
+    out = [
+        f'<clipPath id="{clip_id}"><rect x="{_num(r.x)}" y="{_num(r.y)}" '
+        f'width="{_num(r.w)}" height="{_num(r.h)}"/></clipPath>',
+        f'<g clip-path="url(#{clip_id})" {ink} pointer-events="none">',
+    ]
+    y = r.y + _PAD
+    for css, text, size, line_height in lines:
+        y += line_height
+        attrs = f' class="{css}"' if css else ""
+        out.append(
+            f'<text{attrs} x="{_num(r.x + _PAD)}" y="{_num(y - line_height * 0.28)}" '
+            f'font-size="{_num(size)}">{_xml(text)}</text>'
+        )
+    out.append("</g>")
+    return out
+
+
 def _tile(
     tile: Tile, index: int, group_index: int, data: MapData, first: bool, group: Group
 ) -> list[str]:
@@ -164,45 +216,13 @@ def _tile(
         f'data-size="{int(tile.size)}"><title>{_xml(title)}</title></rect>'
     ]
 
-    font = 16 if r.w >= 220 and r.h >= 96 else 13 if r.w >= 110 and r.h >= 44 else 11
-    width, room = r.w - 2 * _PAD, r.h - 2 * _PAD + 2
-    lines: list[tuple[str, str, float, float]] = []  # class, text, font size, line height
-    if first and r.w >= 96:
+    tag = ""
+    if first:
         label = DISPLAY_NAMES.get(group.name, group.name).upper()
-        tag = _fit(f"{label}  {format_size(int(group.size))}", width, _TAG_FONT * 1.15)
-        if tag and _TAG_LINE <= room:
-            lines.append(("tag", tag, _TAG_FONT, _TAG_LINE))
-    used = sum(line[3] for line in lines)
-    for css, text, size in (
-        ("name", name, font),
-        ("", detail, font * 0.88),
-        ("", extra, font * 0.88),
-    ):
-        fitted = _fit(text, width, size) if text else ""
-        if not fitted or used + size * 1.3 > room:
-            break  # a detail never appears without the lines above it
-        lines.append((css, fitted, size, size * 1.3))
-        used += size * 1.3
-    if not lines:
-        return out
-
-    out.append(
-        f'<clipPath id="clip{index}"><rect x="{_num(r.x)}" y="{_num(r.y)}" '
-        f'width="{_num(r.w)}" height="{_num(r.h)}"/></clipPath>'
+        tag = f"{label}  {format_size(int(group.size))}"
+    return out + label_markup(
+        r, f"clip{index}", f'style="fill:var({ink_var})"', name, detail, extra, tag
     )
-    out.append(
-        f'<g clip-path="url(#clip{index})" style="fill:var({ink_var})" pointer-events="none">'
-    )
-    y = r.y + _PAD
-    for css, text, size, line_height in lines:
-        y += line_height
-        attrs = f' class="{css}"' if css else ""
-        out.append(
-            f'<text{attrs} x="{_num(r.x + _PAD)}" y="{_num(y - line_height * 0.28)}" '
-            f'font-size="{_num(size)}">{_xml(text)}</text>'
-        )
-    out.append("</g>")
-    return out
 
 
 def render_svg(scan: Scan, *, size: int = 1000, use_disk: bool = False) -> str:

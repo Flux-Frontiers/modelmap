@@ -220,3 +220,102 @@ def test_version_and_module_entry_point() -> None:
         [sys.executable, "-m", "modelmap", "--version"], capture_output=True, text=True, check=True
     )
     assert result.stdout.strip() == f"modelmap {__version__}"
+
+
+# ------------------------------------------------------------------------- map
+
+
+def test_map_writes_the_interactive_page(
+    machine: FakeMachine, ctx: Context, tmp_path: Path
+) -> None:
+    target = tmp_path / "out" / "map.html"
+    target.parent.mkdir()
+    status, text = run(ctx, "map", "--no-sweep", "-o", str(target))
+    assert status == 0 and text.strip() == f"Wrote {target}"
+    html = target.read_text()
+    assert html.startswith("<!doctype html>") and "modelmap rm ollama:tiny:1b" in html
+
+
+def test_map_default_file_names(
+    machine: FakeMachine, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    run(Context(machine.home, {}, "darwin"), "map", "--only", "ollama")
+    run(Context(machine.home, {}, "darwin"), "map", "--only", "ollama", "--svg")
+    assert (tmp_path / "modelmap.html").read_text().startswith("<!doctype html>")
+    assert (tmp_path / "modelmap.svg").read_text().startswith("<svg ")
+
+
+def test_map_from_an_inventory_made_elsewhere(
+    machine: FakeMachine, ctx: Context, tmp_path: Path
+) -> None:
+    _, text = run(ctx, "scan", "--json", "--redact")
+    inventory = tmp_path / "inventory.json"
+    inventory.write_text(text)
+    target = tmp_path / "theirs.html"
+    status, _ = run(
+        Context(tmp_path, {}, "linux"), "map", "--from-json", str(inventory), "-o", str(target)
+    )
+    html = target.read_text()
+    assert status == 0 and "tiny:1b" in html
+    assert str(machine.home) not in html
+
+
+def test_map_disk_changes_the_areas(tmp_path: Path, ctx: Context) -> None:
+    scan_result = Scan(
+        records=[
+            ModelRecord("a", "hf", "gguf", "/a", 100, 10),
+            ModelRecord("b", "hf", "gguf", "/b", 100, 90),
+        ]
+    )
+    inventory = tmp_path / "i.json"
+    inventory.write_text(scan_result.to_json())
+    run(ctx, "map", "--from-json", str(inventory), "--svg", "-o", str(tmp_path / "size.svg"))
+    run(
+        ctx,
+        "map",
+        "--from-json",
+        str(inventory),
+        "--svg",
+        "--disk",
+        "-o",
+        str(tmp_path / "disk.svg"),
+    )
+    assert 'data-size="100"' in (tmp_path / "size.svg").read_text()
+    assert 'data-size="90"' in (tmp_path / "disk.svg").read_text()
+
+
+def test_map_open_hands_the_file_to_the_browser(
+    tmp_path: Path, ctx: Context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    opened: list[str] = []
+    # The browser is outside the program: the one thing replaced here.
+    monkeypatch.setattr("webbrowser.open", lambda url: opened.append(url) or True)
+    inventory = tmp_path / "i.json"
+    inventory.write_text(Scan().to_json())
+    target = tmp_path / "m.html"
+    run(ctx, "map", "--from-json", str(inventory), "-o", str(target))
+    assert opened == []
+    run(ctx, "map", "--from-json", str(inventory), "-o", str(target), "--open")
+    assert opened == [f"file://{target}"]
+    spaced = tmp_path / "my maps" / "m.html"
+    spaced.parent.mkdir()
+    run(ctx, "map", "--from-json", str(inventory), "-o", str(spaced), "--open")
+    assert opened[-1].endswith("/my%20maps/m.html")
+
+
+@pytest.mark.parametrize(
+    "extra", [["--redact"], ["/some/path"], ["--only", "hf"], ["--no-sweep"], ["--max-depth", "2"]]
+)
+@pytest.mark.parametrize("command", ["list", "map"])
+def test_inventory_is_read_as_it_is(
+    command: str, extra: list[str], ctx: Context, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # An option that would be silently ignored is refused: a page made with
+    # --from-json --redact would keep its real paths.
+    inventory = tmp_path / "i.json"
+    inventory.write_text(Scan().to_json())
+    with pytest.raises(SystemExit) as raised:
+        main([command, "--from-json", str(inventory), *extra], ctx=ctx)
+    assert raised.value.code == 2
+    assert "reads an inventory as it is" in capsys.readouterr().err

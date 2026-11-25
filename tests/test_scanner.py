@@ -230,6 +230,13 @@ def test_path_can_be_one_model_directory(machine: FakeMachine, ctx: Context) -> 
     assert (record.name, record.format, record.quant) == ("mlx-community/Tiny-4bit", "mlx", "4-bit")
 
 
+def test_file_named_and_swept_is_one_record(machine: FakeMachine, ctx: Context) -> None:
+    result = scan(ctx, Options(paths=[str(machine.files["loose"])], sweep=True))
+    loose = [r for r in result.records if r.name == "models/loose"]
+    assert len(loose) == 1 and loose[0].size_bytes > 0
+    assert loose[0].file_list[0].used_by == []
+
+
 def test_path_can_be_one_file(machine: FakeMachine, ctx: Context) -> None:
     result = scan(ctx, Options(paths=[str(machine.files["small"])], defaults=False))
     (record,) = result.records

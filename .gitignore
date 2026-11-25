@@ -14,8 +14,8 @@ htmlcov/
 uv.lock
 
 # Output of `modelmap map` and `modelmap scan --json` run inside the repo.
-/map.html
-/map.svg
+/modelmap.html
+/modelmap.svg
 /inventory.json
 
 # AgentKG conversation memory: a transcript of local sessions, never committed.

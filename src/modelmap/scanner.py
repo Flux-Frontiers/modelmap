@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 
 from modelmap import __version__
 from modelmap.providers import PROVIDERS, hf, ollama
-from modelmap.providers.base import Context
+from modelmap.providers.base import Context, finish
 from modelmap.providers.generic import MIN_UNVERIFIED_SIZE, scan_file, scan_tree
 from modelmap.records import ModelRecord, Scan, ScanRoot
 
@@ -180,8 +180,18 @@ def scan(ctx: Context | None = None, options: Options | None = None) -> Scan:
             run.sweep()
     except KeyboardInterrupt:
         ctx.warn("", "interrupted: the results are partial")
+    # A file named on the command line is found again by the sweep. Keep the
+    # first record of each (provider, path); the ledger charged it already.
+    seen: set[tuple[str, str]] = set()
+    records = []
+    for record in run.records:
+        key = (record.provider, os.path.realpath(record.path))
+        if key not in seen:
+            seen.add(key)
+            records.append(record)
+    finish(records)
     return Scan(
-        records=run.records,
+        records=records,
         roots=run.roots,
         warnings=ctx.warnings,
         elapsed_s=round(time.perf_counter() - start, 3),
@@ -221,6 +231,9 @@ def redact(scan: Scan, home: str | os.PathLike[str]) -> Scan:
     scan.hostname = None
     for record in scan.records:
         record.path = hide(record.path)
+        for entry in record.file_list:
+            entry.path = hide(entry.path)
+            entry.used_by = [hide_name(user) for user in entry.used_by]
         record.name = hide_name(record.name)
         record.aliases = [hide_name(a) for a in record.aliases]
         record.shared_with = [hide_name(o) for o in record.shared_with]

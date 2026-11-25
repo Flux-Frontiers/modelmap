@@ -22,6 +22,31 @@ def _load(cls: Any, data: dict[str, Any]) -> Any:
 
 
 @dataclass
+class FileEntry:
+    """One file of a record.
+
+    :param path: Real path of the file, with symlinks resolved.
+    :param label: What the file is within its model: its path inside the
+        model directory or snapshot, or the kind of an Ollama layer.
+    :param size_bytes: Apparent size of the file itself.
+    :param disk_bytes: Bytes allocated on disk.
+    :param charged: False when another record was charged for this file,
+        so it adds nothing to this record's size.
+    :param note: A remark such as ``not in the current revision``.
+    :param used_by: Other records that use the same file. Deleting the
+        file would break them too.
+    """
+
+    path: str
+    label: str
+    size_bytes: int
+    disk_bytes: int
+    charged: bool = True
+    note: str = ""
+    used_by: list[str] = field(default_factory=list)
+
+
+@dataclass
 class ModelRecord:
     """One model, dataset or cache entry found on disk.
 
@@ -40,6 +65,7 @@ class ModelRecord:
     :param params_exact: False when ``params`` is an estimate.
     :param mtime: Newest modification time among the files, as a POSIX time.
     :param files: Number of files.
+    :param file_list: The files themselves, in the order they were found.
     :param aliases: Other names for the same files, such as further Ollama
         tags that point at the same weights.
     :param shared_with: Names of records that share a file with this one.
@@ -59,6 +85,7 @@ class ModelRecord:
     params_exact: bool = True
     mtime: float | None = None
     files: int = 1
+    file_list: list[FileEntry] = field(default_factory=list)
     aliases: list[str] = field(default_factory=list)
     shared_with: list[str] = field(default_factory=list)
     issues: list[str] = field(default_factory=list)
@@ -149,6 +176,8 @@ class Scan:
             )
         scan = _load(cls, data)
         scan.records = [_load(ModelRecord, r) for r in data.get("records", [])]
+        for record in scan.records:
+            record.file_list = [_load(FileEntry, f) for f in record.file_list]
         scan.roots = [_load(ScanRoot, r) for r in data.get("roots", [])]
         scan.warnings = [_load(ScanWarning, w) for w in data.get("warnings", [])]
         return scan

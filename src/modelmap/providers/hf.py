@@ -89,11 +89,26 @@ def _current_snapshot(ctx: Context, repo: str) -> str | None:
 def _scan_repo(ctx: Context, repo: os.DirEntry[str], provider: str) -> ModelRecord | None:
     prefix, _, rest = repo.name.partition("--")
     name = rest.replace("--", "/")
+    snapshot = _current_snapshot(ctx, repo.path)
+    files = files_under(ctx, snapshot) if snapshot else []
+    present = [f for f in files if os.path.exists(f)]
+    # Blobs are named by hash; the current snapshot gives them their names.
+    named = {os.path.realpath(f): os.path.relpath(f, snapshot) for f in present} if snapshot else {}
+
     tally = Tally()
     blobs = os.path.join(repo.path, "blobs")
     if os.path.isdir(blobs):
         entries = listdir(ctx, blobs)
-        tally.charge(ctx, f"{provider}:{name}", [e.path for e in entries])
+        labels = {}
+        for entry in entries:
+            label = named.get(os.path.realpath(entry.path))
+            if entry.name.endswith(".incomplete"):
+                labels[entry.path] = (entry.name[:16], "incomplete download")
+            elif label is None:
+                labels[entry.path] = (entry.name[:16], "not in the current revision")
+            else:
+                labels[entry.path] = (label, "")
+        tally.charge(ctx, f"{provider}:{name}", [e.path for e in entries], labels)
         if any(e.name.endswith(".incomplete") for e in entries):
             tally.issues.append("incomplete download")
     if not tally.files:
@@ -102,9 +117,6 @@ def _scan_repo(ctx: Context, repo: os.DirEntry[str], provider: str) -> ModelReco
 
     kind = _KINDS[prefix]
     issues: list[str] = []
-    snapshot = _current_snapshot(ctx, repo.path)
-    files = files_under(ctx, snapshot) if snapshot else []
-    present = [f for f in files if os.path.exists(f)]
     if snapshot:
         issues += [
             f"broken link: {os.path.relpath(f, snapshot)}" for f in files if f not in present

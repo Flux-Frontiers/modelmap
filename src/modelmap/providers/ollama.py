@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 from typing import Any
 
 from modelmap.headers import sniff
@@ -71,6 +72,15 @@ def tag_name(parts: tuple[str, ...]) -> str:
         if repo[:1] == ["library"]:
             repo = repo[1:]
     return f"{'/'.join(repo)}:{tag}"
+
+
+def _layer_kind(layer: dict[str, Any]) -> str:
+    """What a blob is, from its media type: ``weights``, ``template``..."""
+    media = str(layer.get("mediaType", ""))
+    if media.startswith(_PREFIX):
+        kind = media[len(_PREFIX) :]
+        return "weights" if kind == "model" else kind
+    return "config" if "container.image" in media else "manifest"
 
 
 def _blob(store: str, digest: str) -> str:
@@ -139,6 +149,31 @@ def _describe(store: str, layers: list[dict[str, Any]]) -> tuple[Description, st
     return Description(format=kind or "unknown"), None
 
 
+def variants(store: str, tag: str) -> list[str]:
+    """Tags sharing a tag's weights but not its other layers.
+
+    Such a tag is a model of its own, usually made with ``ollama create`` to
+    change a setting such as the context length. Removing it loses that
+    setting, which cannot be pulled again.
+
+    :param store: Resolved Ollama models directory.
+    :param tag: Any tag of the group, as ``ollama list`` shows it.
+    :return: The other tags whose non-weight layers differ from ``tag``'s.
+    """
+    ctx = Context(home=Path(store), env={}, platform="")
+    for tags in _read_manifests(ctx, store).values():
+        names = {name: layers for name, layers in tags}
+        if tag not in names:
+            continue
+
+        def setting(layers: list[dict[str, Any]]) -> set[str]:
+            return {d["digest"] for d in layers if d.get("mediaType") not in _PRIMARY}
+
+        own = setting(names[tag])
+        return sorted(name for name, layers in tags if name != tag and setting(layers) != own)
+    return []
+
+
 def scan(root: ScanRoot, ctx: Context) -> list[ModelRecord]:
     """One record per unique set of weights, plus any unreferenced blobs."""
     store = root.resolved
@@ -149,6 +184,7 @@ def scan(root: ScanRoot, ctx: Context) -> list[ModelRecord]:
         name, first_layers = tags[0]
         issues: list[str] = []
         paths: list[str] = []
+        labels: dict[str, tuple[str, str]] = {}
         for _, layers in tags:
             for layer in layers:
                 path = _blob(store, layer["digest"])
@@ -156,13 +192,14 @@ def scan(root: ScanRoot, ctx: Context) -> list[ModelRecord]:
                     continue
                 if os.path.exists(path):
                     paths.append(path)
+                    labels[path] = (_layer_kind(layer), "")
                 elif layer.get("mediaType", "").startswith(_PREFIX):
                     issues.append(
                         f"missing blob {layer['digest'][:19]} "
                         f"({layer.get('size', 'unknown')} bytes declared)"
                     )
         tally = Tally()
-        tally.charge(ctx, f"{NAME}:{name}", paths)
+        tally.charge(ctx, f"{NAME}:{name}", paths, labels)
         description, main = _describe(store, first_layers)
         records.append(
             tally.record(

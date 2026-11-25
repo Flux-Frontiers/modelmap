@@ -1,0 +1,686 @@
+"""Draw a scan as one interactive page that works offline.
+
+The page is a set of views, every one laid out here in Python and written
+into the file as plain markup:
+
+- a top view per grouping (by store, format, family or kind);
+- a view per group, where the group's records fill the square;
+- a view per record, where its individual files fill the square.
+
+Clicking a tile opens the view below it, down to the files. The script in
+the page only shows and hides views, moves a tooltip and copies text; it
+creates no markup, so a model name can never become code. The page loads
+nothing from the network.
+
+The page deletes nothing itself. For each record it shows where the files
+are, which other records use them, and the ``modelmap rm`` command that
+removes the record, or why it cannot.
+"""
+
+from __future__ import annotations
+
+import shlex
+
+from modelmap import palette
+from modelmap.mapdata import MapData, build
+from modelmap.records import FileEntry, ModelRecord, Scan
+from modelmap.removal import plan, target_of
+from modelmap.render_svg import (
+    DISPLAY_NAMES,
+    MIN_FRACTION,
+    _notes,
+    _num,
+    _summary,
+    _tooltip,
+    _xml,
+    label_markup,
+)
+from modelmap.treemap import Item, Rect, layout
+from modelmap.units import format_count, format_size
+
+CANVAS = Rect(0, 0, 1000, 1000)
+GROUPINGS = {"provider": "Store", "format": "Format", "family": "Family", "kind": "Kind"}
+
+
+def _group_of(record: ModelRecord, by: str) -> str:
+    return str(getattr(record, by) or "unknown")
+
+
+def _group_label(name: str, by: str) -> str:
+    return DISPLAY_NAMES.get(name, name) if by == "provider" else name
+
+
+def _slug(provider: str) -> str:
+    """CSS class suffix for a provider's color."""
+    return provider if provider in palette.PROVIDER_COLORS else "other"
+
+
+def _short(name: str) -> str:
+    return name.rsplit("/", 1)[-1]
+
+
+class _Page:
+    """Collects the views and their side panels."""
+
+    def __init__(self, data: MapData, use_disk: bool, ollama_stores: list[str]) -> None:
+        self.data = data
+        self.use_disk = use_disk
+        self.ollama_stores = ollama_stores
+        self.views: list[str] = []
+        self.panels: list[str] = []
+        self.clips = 0
+
+    def size_of(self, record: ModelRecord) -> int:
+        return record.disk_bytes if self.use_disk else record.size_bytes
+
+    def file_size(self, entry: FileEntry) -> int:
+        return entry.disk_bytes if self.use_disk else entry.size_bytes
+
+    def clip(self) -> str:
+        self.clips += 1
+        return f"clip{self.clips}"
+
+    # ------------------------------------------------------------- tiles
+
+    def tile(
+        self,
+        rect: Rect,
+        provider: str,
+        size: int,
+        tip: str,
+        name: str,
+        lines: tuple[str, str, str, str],
+        go: str = "",
+    ) -> list[str]:
+        """One tile: a focusable group holding the rectangle and its label.
+
+        A tile that opens a record takes its tooltip from that record's
+        panel, so the text is in the page once, not once per view.
+        """
+        slug = _slug(provider)
+        attrs = f'class="t" data-name="{_xml(name.lower())}"'
+        attrs += f' data-tip-of="p-{go}"' if go.startswith("rec-") else f' data-tip="{_xml(tip)}"'
+        if go:
+            label = _xml(f"{name}, {format_size(size)}")
+            attrs += f' data-go="{go}" tabindex="0" role="button" aria-label="{label}"'
+        short, detail, extra, tag = lines
+        return [
+            f"<g {attrs}>",
+            f'<rect class="tile p-{slug}" x="{_num(rect.x)}" y="{_num(rect.y)}" '
+            f'width="{_num(rect.w)}" height="{_num(rect.h)}" rx="3" data-size="{size}"/>',
+            *label_markup(rect, self.clip(), f'class="i-{slug}"', short, detail, extra, tag),
+            "</g>",
+        ]
+
+    def record_tile(self, index: int, rect: Rect, size: int, tag: str) -> list[str]:
+        record = self.data.records[index]
+        detail = "  ".join(part for part in (format_size(size), record.quant) if part)
+        count = format_count(record.params, record.params_exact)
+        lines = (_short(record.name), detail, f"{count} parameters" if count else "", tag)
+        return self.tile(rect, record.provider, size, "", record.name, lines, f"rec-{index}")
+
+    # ------------------------------------------------------------- views
+
+    def view(self, view_id: str, title: str, parents: dict[str, str], body: list[str]) -> None:
+        attrs = "".join(f' data-{key}="{_xml(value)}"' for key, value in parents.items())
+        self.views += [
+            # The id differs from the name used in links, so that following
+            # a link never makes the browser scroll to the element.
+            f'<g class="view" id="v-{view_id}" data-view="{view_id}" '
+            f'data-title="{_xml(title)}"{attrs}>',
+            *body,
+            "</g>",
+        ]
+
+    def panel(self, view_id: str, body: list[str], tip: str = "") -> None:
+        attr = f' data-tip="{_xml(tip)}"' if tip else ""
+        self.panels += [
+            f'<section class="panel" id="p-{view_id}"{attr} hidden>',
+            *body,
+            "</section>",
+        ]
+
+    def top(self, by: str) -> dict[str, str]:
+        """The top view of one grouping; returns each group's view id."""
+        data = self.data
+        items = [
+            Item(item.key, _group_of(data.records[int(item.key)], by), item.size, item.label)
+            for item in data.items
+        ]
+        groups = layout(items, CANVAS, min_fraction=MIN_FRACTION)
+        ids = {group.name: f"grp-{by}-{n}" for n, group in enumerate(groups)}
+        body: list[str] = []
+        rows: list[str] = []
+        for group in groups:
+            label = _group_label(group.name, by)
+            for position, tile in enumerate(group.tiles):
+                tag = f"{label.upper()}  {format_size(int(group.size))}" if position == 0 else ""
+                if tile.members:
+                    count = len(tile.members)
+                    names = sorted(data.records[int(k)].name for k in tile.members)
+                    shown = names[:12] + ([f"and {count - 12} more"] if count > 12 else [])
+                    tip = "\n".join(
+                        [f"{count} smaller entries, {format_size(int(tile.size))}", label, *shown]
+                    )
+                    provider = (
+                        data.records[int(tile.members[0])].provider
+                        if by != "provider"
+                        else group.name
+                    )
+                    lines = (f"{count} smaller", format_size(int(tile.size)), "", tag)
+                    body += self.tile(
+                        tile.rect,
+                        provider,
+                        int(tile.size),
+                        tip + "\nClick to see them",
+                        f"{count} smaller in {label}",
+                        lines,
+                        ids[group.name],
+                    )
+                else:
+                    body += self.record_tile(int(tile.key), tile.rect, int(tile.size), tag)
+            g = group.rect
+            body.append(
+                f'<rect class="block" x="{_num(g.x)}" y="{_num(g.y)}" width="{_num(g.w)}" '
+                f'height="{_num(g.h)}"/>'
+            )
+            count = sum(len(t.members) or 1 for t in group.tiles)
+            swatch = f'<span class="sw p-{_slug(group.name)}"></span>' if by == "provider" else ""
+            rows.append(
+                f'<tr data-name="{_xml(label.lower())}"><td>{swatch}'
+                f'<button class="link" data-go="{ids[group.name]}">{_xml(label)}</button></td>'
+                f'<td class="n">{format_size(int(group.size))}</td>'
+                f'<td class="n">{100 * group.size / data.total:.0f}%</td><td class="n">{count}</td></tr>'
+            )
+            self.group(by, ids[group.name], group.name, [t for t in items if t.group == group.name])
+        self.view(f"top-{by}", "All models", {"by": by}, body)
+
+        panel = [
+            f"<h2>By {GROUPINGS[by].lower()}</h2>",
+            '<table><thead><tr><th scope="col">Group</th><th scope="col" class="n">Size</th>'
+            '<th scope="col" class="n">Share</th><th scope="col" class="n">Entries</th></tr></thead>',
+            "<tbody>",
+            *rows,
+            "</tbody></table>",
+            *self.problems(),
+        ]
+        self.panel(f"top-{by}", panel)
+        return ids
+
+    def group(self, by: str, view_id: str, name: str, items: list[Item]) -> None:
+        """One group's records filling the square, nothing merged."""
+        label = _group_label(name, by)
+        total = sum(item.size for item in items)
+        body: list[str] = []
+        rows: list[str] = []
+        for group in layout([Item(i.key, "", i.size, i.label) for i in items], CANVAS):
+            for tile in group.tiles:
+                index = int(tile.key)
+                body += self.record_tile(index, tile.rect, int(tile.size), "")
+                rows.append(self.record_row(index, int(tile.size)))
+        self.view(view_id, label, {"by": by, "parent": f"top-{by}"}, body)
+        self.panel(
+            view_id,
+            [
+                f"<h2>{_xml(label)}</h2>",
+                f'<p class="sub">{format_size(int(total))} in {len(items)} '
+                f"{'entry' if len(items) == 1 else 'entries'}. Click one to see its files.</p>",
+                '<table><thead><tr><th scope="col">Name</th><th scope="col" class="n">Size</th>'
+                '<th scope="col">Quantization</th><th scope="col" class="n">Parameters</th></tr></thead>',
+                "<tbody>",
+                *rows,
+                "</tbody></table>",
+            ],
+        )
+
+    def record_row(self, index: int, size: int) -> str:
+        record = self.data.records[index]
+        flag = ' <span class="flag">problem</span>' if record.issues else ""
+        return (
+            f'<tr data-name="{_xml(record.name.lower())}"><td>'
+            f'<span class="sw p-{_slug(record.provider)}"></span>'
+            f'<button class="link" data-go="rec-{index}">{_xml(record.name)}</button>{flag}</td>'
+            f'<td class="n">{format_size(size)}</td><td>{_xml(record.quant or "")}</td>'
+            f'<td class="n">{format_count(record.params, record.params_exact)}</td></tr>'
+        )
+
+    def problems(self) -> list[str]:
+        """Records with a problem, and those with nothing to draw, as lists.
+
+        A problem must be findable without finding its tile: a broken
+        download can be too small to see.
+        """
+        data = self.data
+        out: list[str] = []
+        flagged = [i for i, record in enumerate(data.records) if record.issues]
+        if flagged:
+            out.append(f'<h3>Problems ({len(flagged)})</h3><ul class="plain">')
+            for index in flagged:
+                record = data.records[index]
+                out.append(
+                    f'<li data-name="{_xml(record.name.lower())}">'
+                    f'<button class="link" data-go="rec-{index}">{_xml(record.name)}</button>'
+                    f'<span class="sub"> {_xml("; ".join(record.issues))}</span></li>'
+                )
+            out.append("</ul>")
+        if data.not_drawn:
+            out.append(
+                f'<h3>No size, not on the map ({len(data.not_drawn)})</h3><ul class="plain">'
+            )
+            for index in data.not_drawn:
+                record = data.records[index]
+                out.append(
+                    f'<li data-name="{_xml(record.name.lower())}">'
+                    f'<button class="link" data-go="rec-{index}">{_xml(record.name)}</button></li>'
+                )
+            out.append("</ul>")
+        return out
+
+    def record(self, index: int, parents: dict[str, str]) -> None:
+        """One record's files filling the square, and its details."""
+        record = self.data.records[index]
+        entries = record.file_list
+        sized = [(n, self.file_size(e)) for n, e in enumerate(entries) if self.file_size(e) > 0]
+        total = sum(size for _, size in sized)
+        items = [Item(str(n), "", size, entries[n].label) for n, size in sized]
+        body: list[str] = []
+        for group in layout(items, CANVAS, min_fraction=MIN_FRACTION):
+            for tile in group.tiles:
+                if tile.members:
+                    count = len(tile.members)
+                    tip = f"{count} smaller files, {format_size(int(tile.size))}\nListed beside the map"
+                    lines = (f"{count} smaller files", format_size(int(tile.size)), "", "")
+                    body += self.tile(
+                        tile.rect,
+                        record.provider,
+                        int(tile.size),
+                        tip,
+                        f"{count} smaller files",
+                        lines,
+                    )
+                    continue
+                entry = entries[int(tile.key)]
+                extra = entry.note or ("also used elsewhere" if entry.used_by else "")
+                lines = (_short(entry.label), format_size(int(tile.size)), extra, "")
+                body += self.tile(
+                    tile.rect,
+                    record.provider,
+                    int(tile.size),
+                    _file_tip(entry, int(tile.size), total),
+                    entry.label,
+                    lines,
+                )
+        if not body:
+            body.append(
+                '<text class="empty" x="500" y="500" text-anchor="middle">No files to draw</text>'
+            )
+        self.view(f"rec-{index}", record.name, parents, body)
+        notes = [self.data.records[i] for i in self.data.attached.get(index, [])]
+        tip = _tooltip(record, self.size_of(record), max(self.data.total, 1), notes)
+        self.panel(f"rec-{index}", self.record_panel(index), tip + "\nClick to see its files")
+
+    def record_panel(self, index: int) -> list[str]:
+        record = self.data.records[index]
+        facts = [
+            ("Store", DISPLAY_NAMES.get(record.provider, record.provider)),
+            ("Kind", record.kind),
+            ("Format", record.format),
+            ("Quantization", record.quant or ""),
+            ("Parameters", format_count(record.params, record.params_exact)),
+            ("Size", format_size(record.size_bytes)),
+            ("On disk", format_size(record.disk_bytes)),
+            ("Also known as", ", ".join(record.aliases)),
+        ]
+        out = [f"<h2>{_xml(record.name)}</h2>", "<dl>"]
+        out += [f"<dt>{label}</dt><dd>{_xml(value)}</dd>" for label, value in facts if value]
+        out.append("</dl>")
+        if record.issues:
+            out.append('<ul class="issues">')
+            out += [f"<li>{_xml(issue)}</li>" for issue in record.issues]
+            out.append("</ul>")
+        attached = [self.data.records[i] for i in self.data.attached.get(index, [])]
+        if attached:
+            names = ", ".join(
+                f"{r.name} ({DISPLAY_NAMES.get(r.provider, r.provider)})" for r in attached
+            )
+            out.append(f'<p class="sub">The same files are also stored as: {_xml(names)}</p>')
+
+        out += ["<h3>Location</h3>", _copyable(record.path, "Copy path")]
+        step = plan(record, self.ollama_stores, check_disk=False)
+        out.append("<h3>To remove</h3>")
+        if step.action != "refuse":
+            target = target_of(record, self.data.records)
+            out.append(_copyable(f"modelmap rm {shlex.quote(target)}", "Copy command"))
+            note = f"{step.note} It lists what will go and asks first."
+        else:
+            note = step.note
+        out.append(f'<p class="sub">{_xml(note)}</p>')
+        users = sorted({user for entry in record.file_list for user in entry.used_by})
+        if users:
+            out.append(
+                '<p class="warn">Some of these files are also used by: '
+                f"{_xml(', '.join(users))}. Removing them breaks those too.</p>"
+            )
+        out.append(
+            '<p class="sub">The page itself deletes nothing: run the command in a terminal. Sharing is '
+            "known only among what this scan covered: a file may also be used by a store that "
+            "was not scanned.</p>"
+            f"<h3>Files ({len(record.file_list)})</h3>"
+        )
+        out.append('<ul class="files">')
+        order = sorted(range(len(record.file_list)), key=lambda n: -record.file_list[n].size_bytes)
+        for n in order:
+            entry = record.file_list[n]
+            remarks = [entry.note] if entry.note else []
+            if not entry.charged:
+                remarks.append("counted under another record")
+            if entry.used_by:
+                remarks.append("also used by " + ", ".join(entry.used_by))
+            remark = f'<span class="sub"> {_xml("; ".join(remarks))}</span>' if remarks else ""
+            out.append(
+                f'<li data-name="{_xml(entry.label.lower())}"><div class="row">'
+                f"<strong>{_xml(entry.label)}</strong>"
+                f'<span class="n">{format_size(self.file_size(entry))}</span></div>'
+                f"{remark}{_copyable(entry.path, 'Copy path')}</li>"
+            )
+        out.append("</ul>")
+        return out
+
+
+def _copyable(text: str, label: str) -> str:
+    """Text shown in full, selectable, with a button that copies it."""
+    return (
+        f'<div class="copy"><code>{_xml(text)}</code>'
+        f'<button data-copy data-label="{label}">{label}</button></div>'
+    )
+
+
+def _file_tip(entry: FileEntry, size: int, total: int) -> str:
+    lines = [entry.label, f"{format_size(size)}, {100 * size / total:.1f}% of this model"]
+    if entry.note:
+        lines.append(entry.note)
+    if not entry.charged:
+        lines.append("Counted under another record")
+    if entry.used_by:
+        lines.append("Also used by: " + ", ".join(entry.used_by))
+    lines.append(entry.path)
+    return "\n".join(lines)
+
+
+def _colors() -> str:
+    """CSS variables for both modes, and the rules that apply them."""
+
+    def variables(mode: str) -> str:
+        parts = [
+            f"--surface:{palette.SURFACE[mode]}",
+            f"--page:{'#f9f9f7' if mode == 'light' else '#0d0d0d'}",
+            f"--text:{palette.TEXT_PRIMARY[mode]}",
+            f"--text2:{palette.TEXT_SECONDARY[mode]}",
+            f"--line:{'#e1e0d9' if mode == 'light' else '#2c2c2a'}",
+            f"--warn:{'#a13a00' if mode == 'light' else '#f0a070'}",
+        ]
+        for name in [*palette.PROVIDER_COLORS, "other"]:
+            color = palette.fill(name, mode)
+            parts += [f"--c-{name}:{color}", f"--i-{name}:{palette.ink_on(color)}"]
+        return ";".join(parts)
+
+    rules = [
+        f":root{{{variables('light')}}}",
+        "@media (prefers-color-scheme:dark){:root:not([data-theme=light]){"
+        f"{variables('dark')};color-scheme:dark}}}}",
+        f":root[data-theme=dark]{{{variables('dark')};color-scheme:dark}}",
+    ]
+    for name in [*palette.PROVIDER_COLORS, "other"]:
+        rules.append(f".p-{name}{{fill:var(--c-{name});background:var(--c-{name})}}")
+        rules.append(f".i-{name}{{fill:var(--i-{name})}}")
+    return "\n".join(rules)
+
+
+_CSS = """
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--text);
+font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;
+padding:20px max(16px,env(safe-area-inset-right,0px)) 32px max(16px,env(safe-area-inset-left,0px))}
+header{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:end;margin-bottom:12px}
+h1{font-size:15px;font-weight:600;margin:0;color:var(--text2)}
+.hero{font-size:34px;font-weight:600;line-height:1.1}
+.sub{color:var(--text2);font-size:13px}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-left:auto}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--surface);color:var(--text);padding:6px 12px;font:inherit;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--text);color:var(--surface)}
+input[type=search]{font:inherit;padding:6px 10px;border:1px solid var(--line);border-radius:8px;
+background:var(--surface);color:var(--text);min-width:0;width:14em}
+#crumbs{display:flex;flex-wrap:wrap;gap:4px;align-items:center;min-height:28px;margin-bottom:8px}
+#crumbs .sep{color:var(--text2)}
+.layout{display:grid;grid-template-columns:minmax(0,min(100%,calc(100vh - 150px))) minmax(0,1fr);
+gap:24px;align-items:start}
+@media (max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}}
+.map{position:relative;background:var(--surface);border-radius:6px}
+.map svg{display:block;width:100%;height:auto;aspect-ratio:1}
+.view{display:none}.view.on{display:inline}
+.tile{stroke:var(--surface);stroke-width:2}
+.block{fill:none;stroke:var(--surface);stroke-width:6;pointer-events:none}
+.t[data-go]{cursor:pointer}
+.t:focus{outline:none}.t:focus-visible .tile{stroke:var(--text);stroke-width:4}
+.t.dim{opacity:.18}
+svg text{font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+.tag{font-size:10px;font-weight:700;letter-spacing:.08em}.name{font-weight:600}
+.empty{fill:var(--text2);font-size:28px}
+#tip{position:fixed;z-index:5;max-width:min(460px,90vw);padding:8px 10px;border-radius:6px;
+background:var(--text);color:var(--surface);font-size:12px;white-space:pre-line;
+overflow-wrap:anywhere;pointer-events:none}
+.panels{min-width:0}
+.panel h2{font-size:20px;margin:0 0 6px;overflow-wrap:anywhere;text-wrap:balance}
+.panel h3{font-size:13px;margin:18px 0 6px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;padding:5px 8px 5px 0;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:600;font-size:12px;color:var(--text2)}
+.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tr.dim,li.dim{opacity:.25}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px}
+button.link{display:inline;border:0;background:none;color:inherit;font:inherit;padding:0;cursor:pointer;
+text-align:left;text-decoration:underline;text-decoration-color:var(--line);
+text-underline-offset:3px;overflow-wrap:anywhere}
+button.link:hover{text-decoration-color:currentColor}
+button:focus-visible,input:focus-visible{outline:2px solid var(--c-hf);outline-offset:2px}
+dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:2px 16px;margin:8px 0}
+dt{color:var(--text2)}dd{margin:0;overflow-wrap:anywhere}
+.copy{display:flex;gap:8px;align-items:start;margin:4px 0}
+.copy code{flex:1;min-width:0;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace;
+background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:5px 8px;
+overflow-wrap:anywhere;user-select:all}
+.copy button{flex:none;font:inherit;font-size:12px;padding:4px 8px;border:1px solid var(--line);
+border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer}
+ul.plain,ul.files{list-style:none;margin:0;padding:0}
+ul.files li{padding:8px 0;border-bottom:1px solid var(--line)}
+.row{display:flex;gap:12px;justify-content:space-between}.row strong{overflow-wrap:anywhere;min-width:0}
+.issues,.warn,.flag{color:var(--warn)}.flag{font-size:11px;font-weight:600;margin-left:6px}
+.issues{padding-left:18px;margin:6px 0}
+footer{margin-top:20px}
+@media (prefers-reduced-motion:no-preference){.t,tr,li{transition:opacity .12s}}
+"""
+
+_JS = """
+(function () {
+  "use strict";
+  var views = {}, current = null, by = "provider";
+  var tip = document.getElementById("tip");
+  var crumbs = document.getElementById("crumbs");
+  var search = document.getElementById("search");
+  Array.prototype.forEach.call(document.querySelectorAll(".view"), function (v) { views[v.dataset.view] = v; });
+
+  function parentOf(view) {
+    var key = "parent" + by.charAt(0).toUpperCase() + by.slice(1);
+    return view.dataset[key] || view.dataset.parent || "";
+  }
+  function filter() {
+    var q = search.value.trim().toLowerCase();
+    var scope = [current, document.getElementById("p-" + current.dataset.view)];
+    scope.forEach(function (root) {
+      Array.prototype.forEach.call(root.querySelectorAll("[data-name]"), function (el) {
+        el.classList.toggle("dim", q !== "" && el.dataset.name.indexOf(q) === -1);
+      });
+    });
+  }
+  function show(id) {
+    var view = views[id] || views["top-" + by];
+    if (view.dataset.by) { by = view.dataset.by; }
+    if (current) {
+      current.classList.remove("on");
+      document.getElementById("p-" + current.dataset.view).hidden = true;
+    }
+    current = view;
+    view.classList.add("on");
+    document.getElementById("p-" + view.dataset.view).hidden = false;
+    Array.prototype.forEach.call(document.querySelectorAll("[data-by]"), function (b) {
+      if (b.tagName === "BUTTON") { b.setAttribute("aria-pressed", String(b.dataset.by === by)); }
+    });
+    var chain = [], at = view;
+    while (at) { chain.unshift(at); at = views[parentOf(at)]; }
+    crumbs.textContent = "";
+    chain.forEach(function (v, n) {
+      if (n) {
+        var sep = document.createElement("span");
+        sep.className = "sep"; sep.textContent = "/";
+        crumbs.appendChild(sep);
+      }
+      var last = n === chain.length - 1;
+      var el = document.createElement(last ? "strong" : "button");
+      el.textContent = v.dataset.title;
+      if (!last) { el.className = "link"; el.dataset.go = v.dataset.view; }
+      crumbs.appendChild(el);
+    });
+    tip.hidden = true;
+    filter();
+  }
+  function go(id) {
+    if (location.hash.slice(1) === id) { show(id); } else { location.hash = id; }
+  }
+  function copy(button) {
+    var done = function () {
+      button.textContent = "Copied";
+      setTimeout(function () { button.textContent = button.dataset.label; }, 1500);
+    };
+    var select = function () {
+      var range = document.createRange();
+      range.selectNodeContents(button.parentNode.querySelector("code"));
+      var selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      button.textContent = "Selected";
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      var text = button.parentNode.querySelector("code").textContent;
+      navigator.clipboard.writeText(text).then(done, select);
+    } else { select(); }
+  }
+
+  document.addEventListener("click", function (event) {
+    var target = event.target.closest("[data-copy],[data-go],button[data-by]");
+    if (!target) { return; }
+    if (target.dataset.copy !== undefined) { copy(target); }
+    else if (target.dataset.go) { go(target.dataset.go); }
+    else { by = target.dataset.by; go("top-" + by); }
+  });
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && current && parentOf(current)) { go(parentOf(current)); return; }
+    var target = event.target.closest && event.target.closest("g[data-go]");
+    if (target && (event.key === "Enter" || event.key === " ")) {
+      event.preventDefault();
+      go(target.dataset.go);
+    }
+  });
+  document.addEventListener("pointermove", function (event) {
+    var target = event.target.closest && event.target.closest("svg [data-tip],[data-tip-of]");
+    if (!target) { tip.hidden = true; return; }
+    var source = target.dataset.tipOf ? document.getElementById(target.dataset.tipOf) : target;
+    tip.textContent = source.dataset.tip;
+    tip.hidden = false;
+    var box = tip.getBoundingClientRect();
+    var x = Math.min(event.clientX + 14, window.innerWidth - box.width - 8);
+    var y = event.clientY + 16;
+    if (y + box.height > window.innerHeight - 8) { y = event.clientY - box.height - 12; }
+    tip.style.left = Math.max(8, x) + "px";
+    tip.style.top = Math.max(8, y) + "px";
+  });
+  search.addEventListener("input", filter);
+  window.addEventListener("hashchange", function () { show(location.hash.slice(1)); });
+  show(location.hash.slice(1));
+})();
+"""
+
+
+def render_html(scan: Scan, *, use_disk: bool = False) -> str:
+    """Draw a scan as a self-contained interactive page.
+
+    :param scan: The scan to draw.
+    :param use_disk: Size tiles by bytes allocated on disk, not apparent size.
+    :return: The HTML text, ending with a newline.
+    """
+    data = build(scan, use_disk=use_disk)
+    # `ollama rm` acts on the running Ollama's store: its provider roots, not
+    # an Ollama store that was only recognized by its layout somewhere else.
+    live = [r.resolved for r in scan.roots if r.provider == "ollama" and r.source != "layout"]
+    page = _Page(data, use_disk, live)
+    parents: dict[int, dict[str, str]] = {i: {} for i in range(len(data.records))}
+    drawn = {int(item.key) for item in data.items}
+    for by in GROUPINGS:
+        ids = page.top(by)
+        for index in drawn:
+            group = ids[_group_of(data.records[index], by)]
+            parents[index][f"parent-{by}"] = group
+    for index in range(len(data.records)):
+        # A record with no tile is reached from the lists; it hangs off the top.
+        links = parents[index] or {"parent": "top-provider"}
+        page.record(index, links)
+
+    models = sum(1 for r in data.records if r.kind in ("model", "auxiliary"))
+    buttons = "".join(
+        f'<button data-by="{by}" aria-pressed="false">{label}</button>'
+        for by, label in GROUPINGS.items()
+    )
+    out = [
+        "<!doctype html>",
+        '<html lang="en">',
+        "<head>",
+        '<meta charset="utf-8">',
+        '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">',
+        "<title>Local models</title>",
+        # An empty icon, so a browser does not go looking for one.
+        '<link rel="icon" href="data:,">',
+        "<style>",
+        _colors(),
+        _CSS.strip(),
+        "</style>",
+        "</head>",
+        "<body>",
+        "<header>",
+        f'<div><h1>Local models</h1><div class="hero">{_xml(format_size(data.total))}</div>'
+        f'<div class="sub">{_xml(_summary(data, models))}</div></div>',
+        '<div class="controls">',
+        f'<div class="seg" role="group" aria-label="Group by">{buttons}</div>',
+        '<input type="search" id="search" placeholder="Filter by name" aria-label="Filter by name">',
+        "</div>",
+        "</header>",
+        '<nav id="crumbs" aria-label="Where you are"></nav>',
+        '<div class="layout">',
+        '<div class="map"><svg viewBox="0 0 1000 1000" role="group" aria-label="Map of models by size">',
+        *page.views,
+        "</svg></div>",
+        '<div class="panels">',
+        *page.panels,
+        "</div>",
+        "</div>",
+        "<footer>",
+        *[f'<p class="sub">{_xml(note)}</p>' for note in _notes(data, use_disk)],
+        '<p class="sub">Click a tile to open it, down to its files. Press Escape to go back up.</p>',
+        "</footer>",
+        '<div id="tip" hidden></div>',
+        "<script>",
+        _JS.strip(),
+        "</script>",
+        "</body>",
+        "</html>",
+    ]
+    return "\n".join(out) + "\n"

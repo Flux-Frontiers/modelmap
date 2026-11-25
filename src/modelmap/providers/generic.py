@@ -83,7 +83,9 @@ def _record(
     kind: str = "model",
 ) -> ModelRecord:
     tally = Tally()
-    tally.charge(ctx, f"{provider}:{name}", files)
+    base = path if os.path.isdir(path) else os.path.dirname(path)
+    labels = {f: (os.path.relpath(f, base), "") for f in files}
+    tally.charge(ctx, f"{provider}:{name}", files, labels)
     return tally.record(
         issues=description.issues,
         name=name,

@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from modelmap.records import ModelRecord, ScanRoot, ScanWarning
+from modelmap.records import FileEntry, ModelRecord, ScanRoot, ScanWarning
 from modelmap.sizing import SizeLedger
 
 # A file smaller than this that two records share is not worth a note:
@@ -49,6 +49,7 @@ class Context:
     :param platform: ``sys.platform`` value: ``darwin``, ``linux``, ``win32``.
     :param ledger: Charges each file once across every provider.
     :param warnings: Paths that could not be read.
+    :param uses: For each file, every record that uses it, in scan order.
     """
 
     home: Path
@@ -56,6 +57,7 @@ class Context:
     platform: str
     ledger: SizeLedger = field(default_factory=SizeLedger)
     warnings: list[ScanWarning] = field(default_factory=list)
+    uses: dict[tuple[int, int], list[str]] = field(default_factory=dict)
 
     @classmethod
     def current(cls) -> Context:
@@ -101,13 +103,22 @@ class Tally:
     mtime: float | None = None
     shared_with: list[str] = field(default_factory=list)
     issues: list[str] = field(default_factory=list)
+    entries: list[FileEntry] = field(default_factory=list)
 
-    def charge(self, ctx: Context, owner: str, paths: Iterable[str | os.PathLike[str]]) -> None:
+    def charge(
+        self,
+        ctx: Context,
+        owner: str,
+        paths: Iterable[str | os.PathLike[str]],
+        labels: Mapping[str, tuple[str, str]] | None = None,
+    ) -> None:
         """Charge files to ``owner``, noting sharing and unreadable files.
 
         :param ctx: The scan context, whose ledger decides who pays.
         :param owner: Name of the record the files belong to.
         :param paths: Files to charge. Symlinks are followed.
+        :param labels: For a path, its ``(label, note)`` in the file list;
+            a path not listed is labeled with its file name.
         """
         for path in paths:
             try:
@@ -128,6 +139,22 @@ class Tally:
             other = charge.shared_with
             if other and file.apparent >= SHARE_NOTE_MIN and other not in self.shared_with:
                 self.shared_with.append(other)
+            users = ctx.uses.setdefault(file.key, [])
+            if owner not in users:
+                users.append(owner)
+            label, note = (labels or {}).get(str(path), (os.path.basename(path), ""))
+            self.entries.append(
+                FileEntry(
+                    path=os.path.realpath(path),
+                    label=label,
+                    size_bytes=file.apparent,
+                    disk_bytes=file.disk,
+                    charged=other is None,
+                    note=note,
+                    # The shared list: complete only when the scan ends.
+                    used_by=users,
+                )
+            )
 
     def record(self, issues: Iterable[str] = (), **fields: Any) -> ModelRecord:
         """Build a record from the tally plus the given fields.
@@ -139,11 +166,26 @@ class Tally:
             size_bytes=self.size,
             disk_bytes=self.disk,
             files=self.files,
+            file_list=self.entries,
             mtime=self.mtime,
             shared_with=self.shared_with,
             issues=[*issues, *self.issues],
             **fields,
         )
+
+
+def finish(records: Iterable[ModelRecord]) -> None:
+    """Complete the file lists once every record has been scanned.
+
+    While a scan runs, each file entry points at one shared list of the
+    records using that file. Give each entry its own list, without the
+    record it belongs to. A file may be the first one charged and still be
+    used by a record scanned later; only now is that known.
+    """
+    for record in records:
+        owner = f"{record.provider}:{record.name}"
+        for entry in record.file_list:
+            entry.used_by = [user for user in entry.used_by if user != owner]
 
 
 def is_file(entry: os.DirEntry[str]) -> bool:

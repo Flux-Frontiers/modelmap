@@ -1,0 +1,101 @@
+# pyproject.toml -- modelmap package configuration (PEP 621)
+#
+# Find local LLM model files and draw them as an area-proportional treemap.
+#
+# Author: Eric G. Suchanek, PhD
+#
+# Build system : Poetry 2.x with PEP 621 [project] table
+#
+# The runtime is the standard library only, so `pipx run modelmap` and
+# `uvx modelmap` start fast on a machine that has nothing installed. Dev
+# tooling is a Poetry group, so it never ships in the wheel.
+#
+# Quick install (poetry)
+# ----------------------
+#   poetry install                      core runtime only
+#   poetry install --with dev           + pytest, ruff, ty, pre-commit
+#
+# Run tests
+# ---------
+#   pytest
+
+[build-system]
+requires = ["poetry-core>=2.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+packages = [{ include = "modelmap", from = "src" }]
+
+# ---------------------------------------------------------------------------
+# PEP 621 project metadata
+# ---------------------------------------------------------------------------
+[project]
+name = "modelmap"
+version = "0.1.0"
+description = "Find local LLM model files across Hugging Face, Ollama, oMLX, LM Studio and llama.cpp, and draw them as a treemap"
+readme = "README.md"
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
+authors = [{ name = "Eric G. Suchanek, PhD", email = "suchanek@flux-frontiers.com" }]
+keywords = ["llm", "gguf", "safetensors", "ollama", "huggingface", "mlx", "disk-usage", "treemap"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "Topic :: System :: Filesystems",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+requires-python = ">=3.10"
+dependencies = []
+
+# ---------------------------------------------------------------------------
+# Dev tooling (Poetry group, not a PEP 621 extra)
+# ---------------------------------------------------------------------------
+# `optional = true` keeps it out of a bare `poetry install`.
+[tool.poetry.group.dev]
+optional = true
+
+[tool.poetry.group.dev.dependencies]
+detect-secrets = ">=1.5.0"
+pre-commit = ">=4.5.1"
+# >=9.0.3 is a security floor, not a preference: GHSA-6w46-j5rx-g56g.
+pytest = ">=9.0.3"
+pytest-cov = ">=5.0.0"
+# Capped below 0.16 to match the rest of the fleet and the rev pinned in
+# .pre-commit-config.yaml.
+ruff = ">=0.15,<0.16"
+ty = ">=0.0.44"
+
+# ---------------------------------------------------------------------------
+# Tool configuration
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length    = 100
+target-version = "py310"
+# Keep prose docs out of ruff 0.16's Markdown code-block formatting.
+exclude = [".claude", "*.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B023", "BLE001", "PLC0415"]
+ignore = ["E501"]
+
+[tool.ty.environment]
+python-version = "3.10"
+root = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts   = "-v --tb=short --strict-markers"
+
+[tool.coverage.run]
+source = ["modelmap"]
+
+[tool.coverage.report]
+# A floor against regression, not a target. Checked by `pytest --cov` in CI
+# and in the pre-commit pytest hook.
+fail_under = 90

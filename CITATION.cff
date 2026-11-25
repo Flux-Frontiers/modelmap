@@ -1,0 +1,17 @@
+cff-version: "1.2.0"
+message: "If you use this software, please cite it using the metadata below."
+type: software
+title: "modelmap: Find Local LLM Models and Map Them by Size"
+abstract: >
+  modelmap finds the large language model files stored on a machine, across
+  the Hugging Face cache, Ollama, oMLX, LM Studio, llama.cpp and arbitrary
+  directories. It identifies files by their headers, counts each shared file
+  once, and draws the result as an area-proportional treemap.
+authors:
+  - family-names: Suchanek
+    given-names: "Eric G., PhD"
+    orcid: "https://orcid.org/0009-0009-0891-1507"
+    email: suchanek@flux-frontiers.com
+    affiliation: "Flux-Frontiers"
+version: "0.1.0"
+license: BSD-3-Clause

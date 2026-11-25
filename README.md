@@ -2,8 +2,8 @@
 
 Find local LLM model files and draw them as an area-proportional treemap.
 
-Status: pre-alpha. The header readers, sizing and data model exist; the
-scanner, command line and map do not yet.
+Status: pre-alpha. The header readers, sizing, data model and the providers
+for each model store exist; the command line and the map do not yet.
 
 ## Development
 

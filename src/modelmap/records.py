@@ -40,6 +40,8 @@ class ModelRecord:
     :param params_exact: False when ``params`` is an estimate.
     :param mtime: Newest modification time among the files, as a POSIX time.
     :param files: Number of files.
+    :param aliases: Other names for the same files, such as further Ollama
+        tags that point at the same weights.
     :param shared_with: Names of records that share a file with this one.
     :param issues: Problems with this entry, such as a truncated header.
     """
@@ -57,6 +59,7 @@ class ModelRecord:
     params_exact: bool = True
     mtime: float | None = None
     files: int = 1
+    aliases: list[str] = field(default_factory=list)
     shared_with: list[str] = field(default_factory=list)
     issues: list[str] = field(default_factory=list)
 

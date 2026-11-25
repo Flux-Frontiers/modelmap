@@ -83,7 +83,10 @@ FILE_TYPES = {
     38: "MXFP4_MOE",
     39: "NVFP4",
     40: "Q1_0",
+    41: "Q2_0",
+    42: "F8_E4M3",
 }
+_FILE_TYPE_GUESSED = 1024  # LlamaFileType.GUESSED: not specified in the file
 
 # Bit width of the unsigned safetensors dtypes MLX packs quantized weights into.
 _PACKED_DTYPES = {"U8": 8, "U16": 16, "U32": 32, "U64": 64}
@@ -123,7 +126,7 @@ class GGUFInfo:
     def quant(self) -> str | None:
         """Quantization label from ``general.file_type``, or None when absent."""
         file_type = self.metadata.get("general.file_type")
-        if file_type is None:
+        if file_type is None or file_type == _FILE_TYPE_GUESSED:
             return None
         return FILE_TYPES.get(file_type, f"file_type {file_type}")
 

@@ -245,8 +245,49 @@ def _build_hf(m: FakeMachine) -> None:
     blob = _write(data / "blobs" / _digest("words"), b"word\n" * 2000)
     _link(data / "snapshots" / "r1" / "words.txt", f"../../blobs/{blob.name}")
 
-    # Seen on a real machine: blobs at the top of the hub, in no repo.
-    m.files["hf_unattributed"] = _write(m.hf_hub / "blobs" / "06" / _digest("stray"), b"\0" * 4096)
+    _write(tiny / ".no_exist" / "rev2" / "tokenizer.model", b"")
+
+    # The store shared between repositories (huggingface_hub 1.32 and later):
+    # the repository's blob is a link into <hub>/blobs/<2 hex>/<xet hash>.
+    shared = m.hf_hub / "blobs"
+    _write(shared / ".huggingface-shared-blobs", "1")
+    xet = _digest("shared weights")
+    payload = shared / xet[:2] / xet
+    write_gguf(
+        payload,
+        tensors=(("w", (2000, 1000 * 1000), GGML_F16),),  # 4 GB
+        metadata={"general.architecture": "qwen3", "general.file_type": 1},
+    )
+    _write(Path(f"{payload}.refs"), "models--acme--shared/blobs/etag1\n")
+    _write(Path(f"{payload}.lock"), b"")
+    repo = m.hf_hub / "models--acme--shared"
+    _link(repo / "blobs" / "etag1", f"../../blobs/{xet[:2]}/{xet}")
+    _link(repo / "snapshots" / "r1" / "shared.F16.gguf", "../../blobs/etag1")
+    m.files["hf_shared_payload"] = payload
+
+    # Shared blobs that no repository links to any more: a model and a stray.
+    orphan = _digest("orphan shared")
+    m.files["hf_shared_orphan"] = shared / orphan[:2] / orphan
+    write_gguf(
+        m.files["hf_shared_orphan"],
+        tensors=(("w", (1000, 1000 * 1000), GGML_F16),),  # 2 GB
+        metadata={"general.architecture": "llama", "general.file_type": 15},
+    )
+    m.files["hf_unattributed"] = _write(shared / "06" / _digest("stray"), b"\0" * 4096)
+
+    # Asked for and never downloaded: a ref and a .no_exist marker only.
+    stub = m.hf_hub / "models--acme--stub"
+    _write(stub / "refs" / "main", "r1")
+    _write(stub / ".no_exist" / "r1" / "model.safetensors", b"")
+
+    # Config fetched, weights never downloaded.
+    meta = m.hf_hub / "models--acme--config-only"
+    blob = _write(meta / "blobs" / _digest("config only"), "{}")
+    _link(meta / "snapshots" / "r1" / "config.json", f"../../blobs/{blob.name}")
+
+    # The Xet cache beside the hub: shards, not model files.
+    xet_dir = m.hf_hub.parent / "xet" / "default" / "shard-cache"
+    m.files["hf_xet_shard"] = _write(xet_dir / "shard1", b"\0" * 8192)
 
 
 def _build_ollama(m: FakeMachine) -> None:
@@ -274,8 +315,10 @@ def _build_ollama(m: FakeMachine) -> None:
     params_b = blob("params_b", b'{"num_ctx":4096}')
     blob("orphan", tensors=(("w", (1000, 1000), GGML_F32),), payload=1 * GB)
 
-    def manifest(relpath: str, layers: list[tuple[str, dict[str, Any]]]) -> None:
-        body = {
+    def manifest(
+        relpath: str, layers: list[tuple[str, dict[str, Any]]], config: bool = True
+    ) -> None:
+        body: dict[str, Any] = {
             "schemaVersion": 2,
             "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
             "layers": [
@@ -283,6 +326,12 @@ def _build_ollama(m: FakeMachine) -> None:
                 for kind, layer in layers
             ],
         }
+        if config:
+            # Real manifests name a config blob outside the layers list.
+            body["config"] = {
+                "mediaType": "application/vnd.docker.container.image.v1+json",
+                **blob(f"config {relpath}", json.dumps({"model_format": "gguf"}).encode()),
+            }
         m.files[f"ollama_manifest_{relpath.rsplit('/', 1)[-1]}"] = _write(
             m.ollama_store / "manifests" / relpath, json.dumps(body)
         )
@@ -293,7 +342,9 @@ def _build_ollama(m: FakeMachine) -> None:
     manifest(
         "hf.co/acme/gone-GGUF/Q4_K_M",
         [("model", {"digest": f"sha256:{_digest('never downloaded')}", "size": 3 * GB})],
+        config=False,
     )
+    _write(m.ollama_store / "manifests" / ".DS_Store", b"\0\0\0\1Bud1")  # macOS leaves these
     _link(m.ollama_link, m.ollama_store)
 
 

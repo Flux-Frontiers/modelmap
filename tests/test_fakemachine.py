@@ -47,7 +47,8 @@ def test_ollama_store_is_outside_home_behind_a_symlink(machine: FakeMachine) -> 
     assert machine.home not in machine.ollama_store.parents
     assert os.path.realpath(machine.ollama_link) == os.path.realpath(machine.ollama_store)
     assert (machine.ollama_link / "blobs").is_dir()
-    assert len(list((machine.ollama_store / "blobs").iterdir())) == 5
+    # weights, template, two params, an orphan, and a config per complete tag
+    assert len(list((machine.ollama_store / "blobs").iterdir())) == 7
 
 
 def test_hf_snapshots_are_links_into_blobs(machine: FakeMachine) -> None:

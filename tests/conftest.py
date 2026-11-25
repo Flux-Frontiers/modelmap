@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from modelmap.providers.base import Context
 from tests.fakemachine import FakeMachine, build
 
 
@@ -16,3 +17,9 @@ def machine(tmp_path: Path) -> Iterator[FakeMachine]:
     m = build(tmp_path)
     yield m
     m.cleanup()
+
+
+@pytest.fixture
+def ctx(machine: FakeMachine) -> Context:
+    """A scan context for the fake machine: its home, an empty environment."""
+    return Context(home=machine.home, env={}, platform="darwin")

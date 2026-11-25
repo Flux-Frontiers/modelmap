@@ -97,6 +97,16 @@ def test_gguf_unknown_file_type_is_reported_not_guessed(tmp_path: Path) -> None:
     assert read_gguf(path).quant == "file_type 999"
 
 
+@pytest.mark.parametrize(
+    ("file_type", "quant"), [(41, "Q2_0"), (42, "F8_E4M3"), (1024, None), (32, "BF16")]
+)
+def test_gguf_newer_file_types(tmp_path: Path, file_type: int, quant: str | None) -> None:
+    # 1024 is LlamaFileType.GUESSED: the file does not say.
+    path = tmp_path / "tiny.gguf"
+    write_gguf(path, tensors=TENSORS, metadata={"general.file_type": file_type})
+    assert read_gguf(path).quant == quant
+
+
 def test_gguf_vocab_only_file(machine: FakeMachine) -> None:
     info = read_gguf(machine.files["vocab"])
     assert info.issues == []

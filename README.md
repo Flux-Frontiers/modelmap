@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Flux-Frontiers/modelmap/main/assets/modelmap_banner.png" alt="modelmap" width="720"/>
+</p>
+
 [![CI](https://github.com/Flux-Frontiers/modelmap/actions/workflows/ci.yml/badge.svg)](https://github.com/Flux-Frontiers/modelmap/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://www.python.org/)
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://github.com/Flux-Frontiers/modelmap/blob/main/LICENSE)

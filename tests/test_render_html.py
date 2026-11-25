@@ -9,9 +9,10 @@ from pathlib import Path
 
 import pytest
 
+from modelmap import __version__
 from modelmap.providers.base import Context
 from modelmap.records import FileEntry, ModelRecord, Scan
-from modelmap.render_html import GROUPINGS, render_html
+from modelmap.render_html import GROUPINGS, HOME_PAGE, group_view, record_view, render_html
 from modelmap.scanner import Options, redact, scan
 from tests.fakemachine import FakeMachine
 from tests.test_render_svg import small_scan
@@ -78,14 +79,14 @@ def test_views_exist_for_every_grouping_group_and_record(page: Page) -> None:
         assert f"top-{by}" in page.views
     assert sum(1 for v in page.views if v.startswith("grp-provider-")) == 4
     records = small_scan().records
-    assert {f"rec-{i}" for i in range(len(records))} <= set(page.views)
+    assert {record_view(r) for r in records} <= set(page.views)
     # Parents: a group hangs off its top view, a record off a group per grouping.
-    assert page.views["grp-format-0"]["data-parent"] == "top-format"
-    rec = page.views["rec-0"]
+    assert page.views[group_view("format", "gguf")]["data-parent"] == "top-format"
+    rec = page.views[record_view(records[0])]
     assert {f"data-parent-{by}" for by in GROUPINGS} <= set(rec)
     assert rec["data-parent-provider"].startswith("grp-provider-")
     # A record with no size has no tile, so it hangs off the top view.
-    assert page.views["rec-10"]["data-parent"] == "top-provider"
+    assert page.views[record_view(records[10])]["data-parent"] == "top-provider"
 
 
 def test_areas_are_in_proportion_in_every_view(page: Page) -> None:
@@ -117,7 +118,7 @@ def test_record_view_draws_its_files(machine: FakeMachine, ctx: Context) -> None
     result = scan(ctx)
     built = Page(render_html(result))
     index = next(i for i, r in enumerate(result.records) if r.name == "acme/Sharded")
-    files = built.tiles[f"rec-{index}"]
+    files = built.tiles[record_view(result.records[index])]
     assert sorted(t["data-name"] for t in files) == [
         "config.json",
         "model-00001-of-00002.safetensors",
@@ -126,7 +127,8 @@ def test_record_view_draws_its_files(machine: FakeMachine, ctx: Context) -> None
     assert all("data-go" not in t for t in files)  # a file is the last level
     tiny = next(i for i, r in enumerate(result.records) if r.name == "acme/tiny")
     assert "not in the current revision" in built.text
-    assert any(t["data-name"] == "model.safetensors" for t in built.tiles[f"rec-{tiny}"])
+    tiny_view = record_view(result.records[tiny])
+    assert any(t["data-name"] == "model.safetensors" for t in built.tiles[tiny_view])
 
 
 def test_panel_shows_location_files_and_removal(machine: FakeMachine, ctx: Context) -> None:
@@ -189,9 +191,12 @@ def test_page_loads_nothing_and_runs_nothing_from_names() -> None:
     assert built.elements.count("script") == 1 and "img" not in built.elements
     assert html.count("</script>") == 1
     assert evil.lower() in built.tiles["top-provider"][0]["data-name"]  # there, as text
-    # Nothing is fetched: the only src/href is the empty icon, and the script
-    # has no network calls. A model name may itself contain "http".
-    assert re.findall(r'(?:src|href)="([^"]*)"', html) == ["data:,"]
+    # Nothing is fetched: the only src/href are the inline icon and the link
+    # home (followed only when clicked), and the script has no network calls.
+    # A model name may itself contain "http".
+    icon, home = re.findall(r'(?:src|href)="([^"]*)"', html)
+    assert icon.startswith("data:image/svg+xml;base64,")
+    assert home == HOME_PAGE
     script = html[html.index("<script>") : html.index("</script>")]
     for word in ("fetch(", "XMLHttpRequest", "import(", "innerHTML", "eval(", "document.write"):
         assert word not in script
@@ -236,7 +241,7 @@ def test_empty_scan_and_disk_sizes() -> None:
     by_disk = Page(render_html(sparse, use_disk=True))
     assert sorted(s for _, _, s in by_size.rects["top-provider"]) == [100, 100]
     assert sorted(s for _, _, s in by_disk.rects["top-provider"]) == [10, 90]
-    assert by_disk.rects["rec-0"][0][2] == 10
+    assert by_disk.rects[record_view(sparse.records[0])][0][2] == 10
 
 
 def test_redacted_scan_makes_a_page_without_the_home_path(
@@ -246,3 +251,39 @@ def test_redacted_scan_makes_a_page_without_the_home_path(
     assert str(machine.home) not in html
     assert str(Path(machine.home).resolve()) not in html
     assert "~/.omlx/models/acme/Sharded" in html
+
+
+def test_view_ids_survive_a_removal() -> None:
+    # After a removal the page reloads at its address; that must open the
+    # same record or group, not whichever now sits at the same position.
+    full = small_scan()
+    fewer = Scan(records=full.records[1:])
+    before, after = Page(render_html(full)), Page(render_html(fewer))
+    gone = record_view(full.records[0])
+    assert gone in before.views and gone not in after.views
+    kept = set(before.views) - {gone}
+    assert {v for v in kept if v.startswith("rec-")} <= set(after.views)
+    for by in GROUPINGS:
+        assert {v for v in kept if v.startswith(f"grp-{by}-")} >= {
+            v for v in after.views if v.startswith(f"grp-{by}-")
+        }
+
+
+def test_records_with_one_path_get_two_views() -> None:
+    (record,) = small_scan().records[:1]
+    twice = Page(render_html(Scan(records=[record, record])))
+    rec = [v for v in twice.views if v.startswith("rec-")]
+    assert len(rec) == 2
+    assert len(twice.ids) == len(set(twice.ids))
+
+
+def test_the_banner_names_the_tool_its_version_and_home() -> None:
+    html = render_html(small_scan())
+    banner = html.split('<div class="brand">', 1)[1].split("<header>", 1)[0]
+    assert "MODELMAP" in banner
+    assert f"v{__version__}" in banner
+    assert f'href="{HOME_PAGE}"' in banner and "Flux-Frontiers" in banner
+    assert '<svg class="logo" aria-hidden="true"' in banner and "<title>" not in banner
+    assert 'rel="icon" href="data:image/svg+xml;base64,' in html
+    # Still nothing loaded from the network: the only external URL is a link.
+    assert re.findall(r'(?:src|href)="(https?:[^"]+)"', html) == [HOME_PAGE]

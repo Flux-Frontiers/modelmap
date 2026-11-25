@@ -19,9 +19,12 @@ removes the record, or why it cannot.
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import shlex
+from importlib import resources
 
-from modelmap import palette
+from modelmap import __version__, palette
 from modelmap.mapdata import MapData, build
 from modelmap.records import FileEntry, ModelRecord, Scan
 from modelmap.removal import plan, target_of
@@ -39,7 +42,28 @@ from modelmap.treemap import Item, Rect, layout
 from modelmap.units import format_count, format_size
 
 CANVAS = Rect(0, 0, 1000, 1000)
+HOME_PAGE = "https://github.com/Flux-Frontiers/modelmap"
+TAGLINE = "WHERE THE WEIGHTS LIVE"
+#: The Art Techno icon that ``scripts/build_logo.py`` writes.
+_ICON = resources.files("modelmap").joinpath("icon.svg").read_text(encoding="utf-8")
 GROUPINGS = {"provider": "Store", "format": "Format", "family": "Family", "kind": "Kind"}
+
+
+def _key(*parts: str) -> str:
+    return hashlib.sha256("\0".join(parts).encode("utf-8", "surrogateescape")).hexdigest()[:16]
+
+
+def record_view(record: ModelRecord) -> str:
+    """A record's view id: from its store and path, so it is the same in every scan.
+
+    A view named by position would open another record once one is removed.
+    """
+    return f"rec-{_key(record.provider, record.path)}"
+
+
+def group_view(by: str, name: str) -> str:
+    """A group's view id, from the grouping and the group's name."""
+    return f"grp-{by}-{_key(by, name)}"
 
 
 def _group_of(record: ModelRecord, by: str) -> str:
@@ -69,6 +93,15 @@ class _Page:
         self.views: list[str] = []
         self.panels: list[str] = []
         self.clips = 0
+        # A scan has one record per (store, path); an inventory written by
+        # hand may not, and two views must not share an id.
+        self.rids: list[str] = []
+        for record in data.records:
+            rid = record_view(record)
+            self.rids.append(rid if rid not in self.rids else f"{rid}-{len(self.rids)}")
+
+    def rid(self, index: int) -> str:
+        return self.rids[index]
 
     def size_of(self, record: ModelRecord) -> int:
         return record.disk_bytes if self.use_disk else record.size_bytes
@@ -117,7 +150,7 @@ class _Page:
         detail = "  ".join(part for part in (format_size(size), record.quant) if part)
         count = format_count(record.params, record.params_exact)
         lines = (_short(record.name), detail, f"{count} parameters" if count else "", tag)
-        return self.tile(rect, record.provider, size, "", record.name, lines, f"rec-{index}")
+        return self.tile(rect, record.provider, size, "", record.name, lines, self.rid(index))
 
     # ------------------------------------------------------------- views
 
@@ -148,7 +181,7 @@ class _Page:
             for item in data.items
         ]
         groups = layout(items, CANVAS, min_fraction=MIN_FRACTION)
-        ids = {group.name: f"grp-{by}-{n}" for n, group in enumerate(groups)}
+        ids = {group.name: group_view(by, group.name) for group in groups}
         body: list[str] = []
         rows: list[str] = []
         for group in groups:
@@ -239,7 +272,7 @@ class _Page:
         return (
             f'<tr data-name="{_xml(record.name.lower())}"><td>'
             f'<span class="sw p-{_slug(record.provider)}"></span>'
-            f'<button class="link" data-go="rec-{index}">{_xml(record.name)}</button>{flag}</td>'
+            f'<button class="link" data-go="{self.rid(index)}">{_xml(record.name)}</button>{flag}</td>'
             f'<td class="n">{format_size(size)}</td><td>{_xml(record.quant or "")}</td>'
             f'<td class="n">{format_count(record.params, record.params_exact)}</td></tr>'
         )
@@ -259,7 +292,7 @@ class _Page:
                 record = data.records[index]
                 out.append(
                     f'<li data-name="{_xml(record.name.lower())}">'
-                    f'<button class="link" data-go="rec-{index}">{_xml(record.name)}</button>'
+                    f'<button class="link" data-go="{self.rid(index)}">{_xml(record.name)}</button>'
                     f'<span class="sub"> {_xml("; ".join(record.issues))}</span></li>'
                 )
             out.append("</ul>")
@@ -271,7 +304,7 @@ class _Page:
                 record = data.records[index]
                 out.append(
                     f'<li data-name="{_xml(record.name.lower())}">'
-                    f'<button class="link" data-go="rec-{index}">{_xml(record.name)}</button></li>'
+                    f'<button class="link" data-go="{self.rid(index)}">{_xml(record.name)}</button></li>'
                 )
             out.append("</ul>")
         return out
@@ -314,10 +347,10 @@ class _Page:
             body.append(
                 '<text class="empty" x="500" y="500" text-anchor="middle">No files to draw</text>'
             )
-        self.view(f"rec-{index}", record.name, parents, body)
+        self.view(self.rid(index), record.name, parents, body)
         notes = [self.data.records[i] for i in self.data.attached.get(index, [])]
         tip = _tooltip(record, self.size_of(record), max(self.data.total, 1), notes)
-        self.panel(f"rec-{index}", self.record_panel(index), tip + "\nClick to see its files")
+        self.panel(self.rid(index), self.record_panel(index), tip + "\nClick to see its files")
 
     def record_panel(self, index: int) -> list[str]:
         record = self.data.records[index]
@@ -611,6 +644,38 @@ _JS = """
 """
 
 
+# The banner keeps the brand's own colors in light and dark mode; the map
+# below keeps the page's. Gold, mint and silkscreen on obsidian are each
+# above 7:1.
+_BRAND_CSS = """
+.brand{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;background:#0B100E;
+color:#EDE6D3;border:1px solid #D4AF5A;border-radius:10px;padding:10px 14px;margin-bottom:16px}
+.brand .logo{width:44px;height:44px;flex:none}
+.brand-name{font-weight:600;font-size:20px;line-height:1;letter-spacing:.24em;color:#D4AF5A}
+.brand-tag{font:500 10.5px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.28em;color:#7FBFA8;
+margin-top:6px}
+.brand-meta{margin-left:auto;display:flex;gap:14px;align-items:center;
+font:12px/1 ui-monospace,Menlo,Consolas,monospace}
+.brand-meta a{color:#D4AF5A;text-underline-offset:3px}
+.brand-meta a:focus-visible{outline:2px solid #7FBFA8;outline-offset:2px}
+"""
+
+
+def _banner() -> list[str]:
+    """The Flux-Frontiers banner: icon, name, tagline, version and a link home."""
+    head, _, rest = _ICON.partition("<title>")
+    icon = head + rest.partition("</title>")[2]
+    icon = icon.replace("<svg ", '<svg class="logo" aria-hidden="true" focusable="false" ', 1)
+    return [
+        '<div class="brand">',
+        icon.strip(),
+        f'<div><div class="brand-name">MODELMAP</div><div class="brand-tag">{TAGLINE}</div></div>',
+        f'<div class="brand-meta"><span>v{_xml(__version__)}</span>'
+        f'<a href="{HOME_PAGE}" rel="noopener noreferrer">Flux-Frontiers</a></div>',
+        "</div>",
+    ]
+
+
 _SERVED_CSS = (
     "#rescan{font:inherit;padding:6px 12px;border:1px solid var(--line);border-radius:8px;"
     "background:var(--surface);color:var(--text);cursor:pointer}"
@@ -691,15 +756,19 @@ def render_html(scan: Scan, *, use_disk: bool = False, served: bool = False) -> 
         '<meta charset="utf-8">',
         '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">',
         "<title>Local models</title>",
-        # An empty icon, so a browser does not go looking for one.
-        '<link rel="icon" href="data:,">',
+        # The icon is inline, so a browser does not go looking for one.
+        '<link rel="icon" href="data:image/svg+xml;base64,'
+        + base64.b64encode(_ICON.encode("utf-8")).decode("ascii")
+        + '">',
         "<style>",
         _colors(),
         _CSS.strip(),
+        _BRAND_CSS.strip(),
         *([_SERVED_CSS] if served else []),
         "</style>",
         "</head>",
         "<body>",
+        *_banner(),
         "<header>",
         f'<div><h1>Local models</h1><div class="hero">{_xml(format_size(data.total))}</div>'
         f'<div class="sub">{_xml(_summary(data, models))}</div></div>',

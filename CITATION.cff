@@ -15,6 +15,7 @@ authors:
     affiliation: "Flux-Frontiers"
 version: "0.1.0"
 date-released: "2026-11-24"
+doi: "10.5281/zenodo.24520428"
 license: BSD-3-Clause
 repository-code: "https://github.com/Flux-Frontiers/modelmap"
 url: "https://github.com/Flux-Frontiers/modelmap"

@@ -3,6 +3,7 @@
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://github.com/Flux-Frontiers/modelmap/blob/main/LICENSE)
 [![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/Flux-Frontiers/modelmap/releases)
 [![Poetry](https://img.shields.io/endpoint?url=https://python-poetry.org/badge/v0.json)](https://python-poetry.org/)
+[![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.24520428-blue.svg)](https://doi.org/10.5281/zenodo.24520428)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://pre-commit.com/)
 [![ORCID](https://img.shields.io/badge/ORCID-0009--0009--0891--1507-A6CE39.svg)](https://orcid.org/0009-0009-0891-1507)
 
@@ -74,7 +75,7 @@ poetry install --with dev
 
 If you use modelmap in your research or project, please cite it:
 
-> Suchanek, E. G. (2026). *modelmap: Find, Map and Remove Local LLM Models* (Version 0.1.0) [Software]. Flux-Frontiers. https://github.com/Flux-Frontiers/modelmap
+> Suchanek, E. G. (2026). *modelmap: Find, Map and Remove Local LLM Models* (Version 0.1.0) [Software]. Flux-Frontiers. https://doi.org/10.5281/zenodo.24520428
 
 ```bibtex
 @software{suchanek_modelmap,
@@ -84,10 +85,12 @@ If you use modelmap in your research or project, please cite it:
   year      = {2026},
   publisher = {Flux-Frontiers},
   url       = {https://github.com/Flux-Frontiers/modelmap},
+  doi       = {10.5281/zenodo.24520428},
 }
 ```
 
-The citation metadata is also in [CITATION.cff](https://github.com/Flux-Frontiers/modelmap/blob/main/CITATION.cff). See the
+The DOI is the Zenodo concept DOI, which always resolves to the newest
+archived release. The citation metadata is also in [CITATION.cff](https://github.com/Flux-Frontiers/modelmap/blob/main/CITATION.cff). See the
 [changelog](https://github.com/Flux-Frontiers/modelmap/blob/main/CHANGELOG.md) for release history.
 
 ## License

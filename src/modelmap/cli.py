@@ -5,6 +5,7 @@
 ``modelmap map``        scan, or read an inventory, and write the treemap
 ``modelmap providers``  show where each store is looked for on this machine
 ``modelmap rm``         remove models, after showing what goes and asking
+``modelmap serve``      serve the map on this machine and open it in a browser
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ from modelmap.removal import TRASH_NOTE, Plan, execute, find, plan
 from modelmap.render_html import render_html
 from modelmap.render_svg import DISPLAY_NAMES, render_svg
 from modelmap.scanner import Options, redact, scan
+from modelmap.serve import App, make_server
 from modelmap.units import format_count, format_size, parse_size
 
 _SORTS: dict[str, Callable[[ModelRecord], Any]] = {
@@ -159,6 +161,16 @@ def _size_arg(text: str) -> int:
         raise argparse.ArgumentTypeError(str(exc)) from None
 
 
+def _port_arg(text: str) -> int:
+    try:
+        port = int(text)
+    except ValueError:
+        port = -1
+    if not 0 <= port <= 65535:
+        raise argparse.ArgumentTypeError(f"not a port: {text}")
+    return port
+
+
 def _parser() -> argparse.ArgumentParser:
     what = argparse.ArgumentParser(add_help=False)
     what.add_argument("paths", nargs="*", metavar="PATH", help="files or directories to scan")
@@ -231,6 +243,28 @@ def _parser() -> argparse.ArgumentParser:
     )
     map_cmd.add_argument("--open", action="store_true", help="open the result in a browser")
 
+    serve_cmd = commands.add_parser(
+        "serve",
+        parents=[what],
+        help="serve the map on this machine and open it in a browser",
+        description=(
+            "Scan, then serve the map from 127.0.0.1 until Ctrl-C. The address it prints "
+            "holds a token for this run; the server refuses requests without it."
+        ),
+    )
+    serve_cmd.add_argument(
+        "--from-json", metavar="FILE", help="read an inventory instead of scanning"
+    )
+    serve_cmd.add_argument(
+        "--disk", action="store_true", help="size tiles by space allocated on disk, not file size"
+    )
+    serve_cmd.add_argument(
+        "--port", type=_port_arg, default=0, help="port on 127.0.0.1 (default: any free port)"
+    )
+    serve_cmd.add_argument(
+        "--no-open", action="store_true", help="print the address; do not open a browser"
+    )
+
     commands.add_parser("providers", help="show where each store is looked for")
 
     rm_cmd = commands.add_parser(
@@ -275,6 +309,41 @@ def _write_map(result: Scan, args: argparse.Namespace, out: TextIO) -> None:
     print(f"Wrote {_text(path)}", file=out)
     if args.open:
         webbrowser.open(Path(path).as_uri())
+
+
+def _serve(args: argparse.Namespace, ctx: Context, out: TextIO, result: Scan) -> int:
+    """The ``serve`` command: runs until Ctrl-C."""
+    if args.from_json:
+        inventory = args.from_json
+
+        def rescan() -> Scan:
+            with open(inventory, encoding="utf-8") as fh:
+                return Scan.from_json(fh.read())
+
+    else:
+
+        def rescan() -> Scan:
+            return _scan(args, ctx)
+
+    def log(line: str) -> None:
+        print(_text(line), file=out, flush=True)
+
+    try:
+        server = make_server(App(result, rescan, use_disk=args.disk), args.port, log)
+    except OSError as exc:
+        print(f"Cannot listen on 127.0.0.1 port {args.port}: {exc.strerror or exc}", file=out)
+        return 1
+    print(f"Serving the map at {server.url}", file=out)
+    print("Press Ctrl-C to stop.", file=out, flush=True)
+    if not args.no_open:
+        webbrowser.open(server.url)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("Stopped.", file=out)
+    finally:
+        server.server_close()
+    return 0
 
 
 def _describe_plan(step: Plan, out: TextIO) -> None:
@@ -400,7 +469,9 @@ def main(
         return _remove(args, ctx, out, ask)
     if args.no_defaults and not args.paths and not getattr(args, "from_json", None):
         parser.error("--no-defaults needs at least one PATH to scan")
-    if args.command in ("list", "map") and args.from_json:
+    if args.command == "serve" and args.redact:
+        parser.error("--redact is for sharing a map; serve shows this machine to its owner")
+    if args.command in ("list", "map", "serve") and args.from_json:
         # An inventory is read as it is. It does not say what the home
         # directory was, so it cannot be redacted here, only when it is made.
         scanning = args.paths or args.only or args.no_sweep or args.exclude or args.redact
@@ -418,6 +489,8 @@ def main(
         _print_list(result, args, out)
     elif args.command == "map":
         _write_map(result, args, out)
+    elif args.command == "serve":
+        return _serve(args, ctx, out, result)
     elif args.json:
         print(result.to_json(), file=out)
     else:

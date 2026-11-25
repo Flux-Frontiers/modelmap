@@ -6,6 +6,7 @@ modelmap list      [PATH ...] [--from-json FILE] [--sort KEY] [--group KEY] [--a
 modelmap map       [PATH ...] [--from-json FILE] [-o FILE] [--svg] [--disk] [--open] [scan options]
 modelmap providers
 modelmap rm        TARGET ... [--dry-run] [-y | --yes]
+modelmap serve     [PATH ...] [--from-json FILE] [--disk] [--port N] [--no-open] [scan options]
 modelmap --version
 ```
 
@@ -78,10 +79,29 @@ what is refused.
 | `--dry-run` | Show what would be removed; remove nothing |
 | `-y`, `--yes` | Do not ask. Without it, `rm` asks on the terminal, and refuses when there is no terminal |
 
+## `modelmap serve`
+
+Scans, then serves the map from this machine at `127.0.0.1` and opens it
+in a browser. The page is the one `map` writes, with a Rescan button.
+The address printed holds a token made for this run; without it the
+server answers nothing. Ctrl-C stops the server.
+
+| Option | Effect |
+|--------|--------|
+| `--from-json FILE` | Serve an inventory instead of scanning; Rescan reads the file again. Takes no scan options |
+| `--disk` | Size tiles by space allocated on disk, not by file size |
+| `--port N` | Listen on this port. The default, 0, takes any free port |
+| `--no-open` | Print the address; do not open a browser |
+
+`--redact` is refused: it is for sharing a map, and the served page is
+for this machine's owner. The server listens on `127.0.0.1` only and
+refuses requests that name another host, come from another page, or lack
+the token.
+
 ## Exit status
 
 | Status | Meaning |
 |--------|---------|
 | 0 | Done |
-| 1 | `--strict` and something could not be read; or `rm` found no match for a target, refused, was declined, or failed |
+| 1 | `--strict` and something could not be read; or `rm` found no match for a target, refused, was declined, or failed; or `serve` could not listen on the port |
 | 2 | The command line was wrong, or an inventory could not be read |

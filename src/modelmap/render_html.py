@@ -611,11 +611,55 @@ _JS = """
 """
 
 
-def render_html(scan: Scan, *, use_disk: bool = False) -> str:
+_SERVED_CSS = (
+    "#rescan{font:inherit;padding:6px 12px;border:1px solid var(--line);border-radius:8px;"
+    "background:var(--surface);color:var(--text);cursor:pointer}"
+    "#rescan:disabled{opacity:.6;cursor:progress}"
+)
+
+# The served page reads the run's token from its own address, so the token
+# is never written into the page.
+_SERVED_JS = """
+(function () {
+  "use strict";
+  var token = new URLSearchParams(location.search).get("t") || "";
+  var button = document.getElementById("rescan");
+  var status = document.getElementById("served-status");
+  function call(path) {
+    return fetch(path, {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "X-Modelmap-Token": token},
+      body: "{}"
+    }).then(function (response) {
+      return response.json().then(function (body) {
+        if (!response.ok) { throw new Error(body.error || response.statusText); }
+        return body;
+      });
+    });
+  }
+  button.addEventListener("click", function () {
+    button.disabled = true;
+    status.textContent = "Scanning...";
+    call("/api/rescan").then(function () { location.reload(); }, function (error) {
+      status.textContent = "Rescan failed: " + error.message;
+      button.disabled = false;
+    });
+  });
+})();
+"""
+
+#: The page's inline scripts, for a server's Content-Security-Policy hashes.
+SCRIPTS = (_JS.strip(), _SERVED_JS.strip())
+
+
+def render_html(scan: Scan, *, use_disk: bool = False, served: bool = False) -> str:
     """Draw a scan as a self-contained interactive page.
 
     :param scan: The scan to draw.
     :param use_disk: Size tiles by bytes allocated on disk, not apparent size.
+    :param served: Add what ``modelmap serve`` needs: a Rescan button and
+        the script that calls the server. Every addition is a line of its
+        own, so the page is the file ``modelmap map`` writes plus those lines.
     :return: The HTML text, ending with a newline.
     """
     data = build(scan, use_disk=use_disk)
@@ -652,6 +696,7 @@ def render_html(scan: Scan, *, use_disk: bool = False) -> str:
         "<style>",
         _colors(),
         _CSS.strip(),
+        *([_SERVED_CSS] if served else []),
         "</style>",
         "</head>",
         "<body>",
@@ -661,6 +706,14 @@ def render_html(scan: Scan, *, use_disk: bool = False) -> str:
         '<div class="controls">',
         f'<div class="seg" role="group" aria-label="Group by">{buttons}</div>',
         '<input type="search" id="search" placeholder="Filter by name" aria-label="Filter by name">',
+        *(
+            [
+                '<button id="rescan" type="button">Rescan</button>',
+                '<span id="served-status" class="sub" role="status"></span>',
+            ]
+            if served
+            else []
+        ),
         "</div>",
         "</header>",
         '<nav id="crumbs" aria-label="Where you are"></nav>',
@@ -680,6 +733,7 @@ def render_html(scan: Scan, *, use_disk: bool = False) -> str:
         "<script>",
         _JS.strip(),
         "</script>",
+        *(["<script>", _SERVED_JS.strip(), "</script>"] if served else []),
         "</body>",
         "</html>",
     ]

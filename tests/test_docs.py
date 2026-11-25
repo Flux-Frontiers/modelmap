@@ -34,7 +34,7 @@ def _options(parser: argparse.ArgumentParser) -> list[str]:
 
 
 def test_there_is_something_to_check() -> None:
-    assert len(_subcommands()) == 5
+    assert len(_subcommands()) == 6
     assert sum(len(_options(p)) for p in _subcommands().values()) > 30
 
 

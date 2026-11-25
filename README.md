@@ -9,8 +9,9 @@ and checkpoint files. It identifies files by their headers, reports
 parameter counts and quantization, and counts a file once however many
 names point at it.
 
-Status: pre-alpha. The scanner and the command line work; the treemap is
-not built yet.
+Status: pre-alpha. The scanner and the command line work. The treemap is
+drawn by `modelmap.render_svg` from Python; the `modelmap map` command
+and the interactive page are not built yet.
 
 ## Use
 

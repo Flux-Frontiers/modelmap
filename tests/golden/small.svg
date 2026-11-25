@@ -1,0 +1,128 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="modelmap" viewBox="0 0 1048 1242" width="1048" height="1242" role="img" aria-label="9 entries with a size: 8 models, 1 other (datasets, caches and other files)">
+<style>
+.modelmap{--surface:#fcfcfb;--text:#0b0b0b;--text2:#52514e;--c0:#1baf7a;--i0:#000000;--c1:#2a78d6;--i1:#000000;--c2:#eb6834;--i2:#000000;--c3:#484842;--i3:#ffffff}
+@media (prefers-color-scheme:dark){.modelmap{--surface:#1a1a19;--text:#f0efec;--text2:#c3c2b7;--c0:#199e70;--i0:#000000;--c1:#3987e5;--i1:#000000;--c2:#d95926;--i2:#000000;--c3:#c8c8c2;--i3:#000000}}
+.modelmap text{font-family:system-ui,-apple-system,'Segoe UI',sans-serif}
+.modelmap .bg{fill:var(--surface)}
+.modelmap .tile{stroke:var(--surface);stroke-width:2}
+.modelmap .block{fill:none;stroke:var(--surface);stroke-width:6}
+.modelmap .hero{fill:var(--text);font-size:34px;font-weight:600}
+.modelmap .sub{fill:var(--text2);font-size:13px}
+.modelmap .key{fill:var(--text);font-size:12px}
+.modelmap .key2{fill:var(--text2);font-size:12px}
+.modelmap .tag{font-size:10px;font-weight:700;letter-spacing:.08em}
+.modelmap .name{font-weight:600}
+</style>
+<rect class="bg" width="1048" height="1242"/>
+<text class="hero" x="24" y="46">63.0 GB</text>
+<text class="sub" x="24" y="68">9 entries with a size: 8 models, 1 other (datasets, caches and other files)</text>
+<g data-group="omlx">
+<rect class="tile" x="24" y="84" width="602.888" height="789.474" rx="3" style="fill:var(--c0)" data-size="30000000000"><title>org/Big-27B-8bit
+oMLX
+mlx, 8-bit, ~27.4B parameters
+30.0 GB, 47.6% of the map
+/models/omlx/org/Big-27B-8bit</title></rect>
+<clipPath id="clip0"><rect x="24" y="84" width="602.888" height="789.474"/></clipPath>
+<g clip-path="url(#clip0)" style="fill:var(--i0)" pointer-events="none">
+<text class="tag" x="31" y="101.8" font-size="10">OMLX  38.0 GB</text>
+<text class="name" x="31" y="120.976" font-size="16">Big-27B-8bit</text>
+<text x="31" y="139.979" font-size="14.08">30.0 GB  8-bit</text>
+<text x="31" y="158.283" font-size="14.08">~27.4B parameters</text>
+</g>
+<rect class="tile" x="24" y="873.474" width="602.888" height="210.526" rx="3" style="fill:var(--c0)" data-size="8000000000"><title>org/Mid-14B-4bit
+oMLX
+mlx, 4-bit, ~14.8B parameters
+8.0 GB, 12.7% of the map
+/models/omlx/org/Mid-14B-4bit</title></rect>
+<clipPath id="clip1"><rect x="24" y="873.474" width="602.888" height="210.526"/></clipPath>
+<g clip-path="url(#clip1)" style="fill:var(--i0)" pointer-events="none">
+<text class="name" x="31" y="895.45" font-size="16">Mid-14B-4bit</text>
+<text x="31" y="914.453" font-size="14.08">8.0 GB  4-bit</text>
+<text x="31" y="932.757" font-size="14.08">~14.8B parameters</text>
+</g>
+</g>
+<g data-group="hf">
+<rect class="tile" x="626.888" y="84" width="397.112" height="559.329" rx="3" style="fill:var(--c1)" data-size="14000000000"><title>acme/sdxl
+Hugging Face
+safetensors
+14.0 GB, 22.2% of the map
+Same files as: acme/copy (lmstudio)
+/models/hf/acme/sdxl</title></rect>
+<clipPath id="clip2"><rect x="626.888" y="84" width="397.112" height="559.329"/></clipPath>
+<g clip-path="url(#clip2)" style="fill:var(--i1)" pointer-events="none">
+<text class="tag" x="633.888" y="101.8" font-size="10">HUGGING FACE  15.0 GB</text>
+<text class="name" x="633.888" y="120.976" font-size="16">sdxl</text>
+<text x="633.888" y="139.979" font-size="14.08">14.0 GB</text>
+</g>
+<rect class="tile" x="626.888" y="643.329" width="397.112" height="39.952" rx="3" style="fill:var(--c1)" data-size="1000000000"><title>acme/words
+Hugging Face
+dataset, files
+1.0 GB, 1.6% of the map
+/models/hf/acme/words</title></rect>
+<clipPath id="clip3"><rect x="626.888" y="643.329" width="397.112" height="39.952"/></clipPath>
+<g clip-path="url(#clip3)" style="fill:var(--i1)" pointer-events="none">
+<text class="name" x="633.888" y="660.625" font-size="11">words</text>
+<text x="633.888" y="673.689" font-size="9.68">1.0 GB</text>
+</g>
+</g>
+<g data-group="ollama">
+<rect class="tile" x="626.888" y="683.281" width="282.441" height="280.863" rx="3" style="fill:var(--c2)" data-size="5000000000"><title>qwen3:8b
+Ollama
+gguf, Q4_K_M, 8.19B parameters
+5.0 GB, 7.9% of the map
+Also: qwen3:latest
+/models/ollama/qwen3:8b</title></rect>
+<clipPath id="clip4"><rect x="626.888" y="683.281" width="282.441" height="280.863"/></clipPath>
+<g clip-path="url(#clip4)" style="fill:var(--i2)" pointer-events="none">
+<text class="tag" x="633.888" y="701.081" font-size="10">OLLAMA  7.0 GB</text>
+<text class="name" x="633.888" y="720.257" font-size="16">qwen3:8b</text>
+<text x="633.888" y="739.26" font-size="14.08">5.0 GB  Q4_K_M</text>
+<text x="633.888" y="757.564" font-size="14.08">8.19B parameters</text>
+</g>
+<rect class="tile" x="909.329" y="683.281" width="114.671" height="276.712" rx="3" style="fill:var(--c2)" data-size="2000000000"><title>llama3.2:3b
+Ollama
+gguf, Q4_K_M, 3.21B parameters
+2.0 GB, 3.2% of the map
+/models/ollama/llama3.2:3b</title></rect>
+<clipPath id="clip5"><rect x="909.329" y="683.281" width="114.671" height="276.712"/></clipPath>
+<g clip-path="url(#clip5)" style="fill:var(--i2)" pointer-events="none">
+<text class="name" x="916.329" y="702.449" font-size="13">llama3.2:3b</text>
+<text x="916.329" y="717.889" font-size="11.44">2.0 GB  Q4_K_M</text>
+<text x="916.329" y="732.761" font-size="11.44">3.21B parame...</text>
+</g>
+<rect class="tile" x="909.329" y="959.993" width="114.671" height="4.151" rx="3" style="fill:var(--c2)" data-size="30000000"><title>2 smaller entries, 30.0 MB
+Ollama
+tiny-a
+tiny-b</title></rect>
+</g>
+<g data-group="generic">
+<rect class="tile" x="626.888" y="964.144" width="397.112" height="119.856" rx="3" style="fill:var(--c3)" data-size="3000000000"><title>checkpoints/last
+Loose files
+pytorch
+3.0 GB, 4.8% of the map
+Problem: unverified: identified by extension only
+/models/generic/checkpoints/last</title></rect>
+<clipPath id="clip7"><rect x="626.888" y="964.144" width="397.112" height="119.856"/></clipPath>
+<g clip-path="url(#clip7)" style="fill:var(--i3)" pointer-events="none">
+<text class="tag" x="633.888" y="981.944" font-size="10">LOOSE FILES  3.0 GB</text>
+<text class="name" x="633.888" y="1001.12" font-size="16">last</text>
+<text x="633.888" y="1020.123" font-size="14.08">3.0 GB</text>
+</g>
+</g>
+<rect class="block" x="24" y="84" width="602.888" height="1000"/>
+<rect class="block" x="626.888" y="84" width="397.112" height="599.281"/>
+<rect class="block" x="626.888" y="683.281" width="397.112" height="280.863"/>
+<rect class="block" x="626.888" y="964.144" width="397.112" height="119.856"/>
+<rect x="24" y="1102" width="12" height="12" rx="2" style="fill:var(--c0)"/>
+<text class="key" x="42" y="1112.5">oMLX<tspan class="key2" dx="8">38.0 GB, 60%, 2 entries</tspan></text>
+<rect x="357.333" y="1102" width="12" height="12" rx="2" style="fill:var(--c1)"/>
+<text class="key" x="375.333" y="1112.5">Hugging Face<tspan class="key2" dx="8">15.0 GB, 24%, 2 entries</tspan></text>
+<rect x="690.667" y="1102" width="12" height="12" rx="2" style="fill:var(--c2)"/>
+<text class="key" x="708.667" y="1112.5">Ollama<tspan class="key2" dx="8">7.0 GB, 11%, 4 entries</tspan></text>
+<rect x="24" y="1124" width="12" height="12" rx="2" style="fill:var(--c3)"/>
+<text class="key" x="42" y="1134.5">Loose files<tspan class="key2" dx="8">3.0 GB, 5%, 1 entry</tspan></text>
+<text class="sub" x="24" y="1162">Area shows file size. A file reachable by several names is counted once.</text>
+<text class="sub" x="24" y="1180">1 more name for a file already on the map is listed on the tile that holds it.</text>
+<text class="sub" x="24" y="1198">2 entries have a problem, named in the tooltip; `modelmap list` shows them all.</text>
+<text class="sub" x="24" y="1216">1 entry has no size and is not drawn.</text>
+</svg>

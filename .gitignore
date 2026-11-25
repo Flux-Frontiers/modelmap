@@ -20,3 +20,6 @@ uv.lock
 
 # AgentKG conversation memory: a transcript of local sessions, never committed.
 **/.agentkg/
+
+# Hypothesis example database.
+.hypothesis/

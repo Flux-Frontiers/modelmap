@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Treemap layout.** `modelmap.treemap` divides a rectangle among sizes
+  with the squarified algorithm of Bruls, Huizing and van Wijk. Areas are
+  exact shares of the total; equal sizes are ordered by name, so a layout
+  is repeatable. Items too small to see are merged into one tile per
+  provider.
+- **Static SVG.** `modelmap.render_svg` draws a scan as one self-contained
+  SVG: a square map with one block per provider, a name tag on each block,
+  labels clipped to their tiles, a tooltip per tile, a legend, and light
+  and dark colors. Every record is a tile, a note on the tile that holds
+  its files, or counted as not drawn.
 - **The `modelmap` command.** `modelmap scan` scans the known stores and
   sweeps the home directory for loose models, then prints a summary by
   provider, or the whole inventory with `--json`. `modelmap list` prints

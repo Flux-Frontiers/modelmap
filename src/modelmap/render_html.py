@@ -86,7 +86,10 @@ def _short(name: str) -> str:
 class _Page:
     """Collects the views and their side panels."""
 
-    def __init__(self, data: MapData, use_disk: bool, ollama_stores: list[str]) -> None:
+    def __init__(
+        self, data: MapData, use_disk: bool, ollama_stores: list[str], removable: bool = False
+    ) -> None:
+        self.removable = removable
         self.data = data
         self.use_disk = use_disk
         self.ollama_stores = ollama_stores
@@ -382,6 +385,11 @@ class _Page:
         step = plan(record, self.ollama_stores, check_disk=False)
         out.append("<h3>To remove</h3>")
         if step.action != "refuse":
+            if self.removable:
+                out.append(
+                    f'<button type="button" class="remove" data-remove="{self.rid(index)}">'
+                    "Remove</button>"
+                )
             target = target_of(record, self.data.records)
             out.append(_copyable(f"modelmap rm {shlex.quote(target)}", "Copy command"))
             note = f"{step.note} It lists what will go and asks first."
@@ -394,8 +402,13 @@ class _Page:
                 '<p class="warn">Some of these files are also used by: '
                 f"{_xml(', '.join(users))}. Removing them breaks those too.</p>"
             )
+        how = (
+            "The Remove button does the same from this page."
+            if self.removable
+            else "The page itself deletes nothing: run the command in a terminal."
+        )
         out.append(
-            '<p class="sub">The page itself deletes nothing: run the command in a terminal. Sharing is '
+            f'<p class="sub">{how} Sharing is '
             "known only among what this scan covered: a file may also be used by a store that "
             "was not scanned.</p>"
             f"<h3>Files ({len(record.file_list)})</h3>"
@@ -677,9 +690,30 @@ def _banner() -> list[str]:
 
 
 _SERVED_CSS = (
-    "#rescan{font:inherit;padding:6px 12px;border:1px solid var(--line);border-radius:8px;"
-    "background:var(--surface);color:var(--text);cursor:pointer}"
-    "#rescan:disabled{opacity:.6;cursor:progress}"
+    "#rescan,button.remove,.rm-buttons button{font:inherit;padding:6px 12px;"
+    "border:1px solid var(--line);border-radius:8px;background:var(--surface);"
+    "color:var(--text);cursor:pointer}"
+    "button.remove,button.danger{color:var(--warn);border-color:var(--warn);font-weight:600}"
+    "button.remove{margin:4px 0 8px}"
+    "#rescan:disabled,.rm-buttons button:disabled,button.remove:disabled{opacity:.6;cursor:progress}"
+    "dialog{width:min(36em,calc(100vw - 32px));border:1px solid var(--line);border-radius:12px;"
+    "background:var(--surface);color:var(--text);padding:20px}"
+    "dialog::backdrop{background:rgb(0 0 0 / .45)}"
+    "dialog h2{margin:0 0 4px;font-size:17px;overflow-wrap:anywhere}"
+    ".rm-list li{padding:3px 0}.rm-list code{font:12px/1.4 ui-monospace,Menlo,Consolas,monospace;"
+    "overflow-wrap:anywhere}"
+    ".rm-buttons{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}"
+)
+
+# Filled by the script with textContent only. Cancel comes first and takes
+# the focus, so Enter does not remove anything.
+_DIALOG = (
+    '<dialog id="rm-dialog" aria-labelledby="rm-title"><h2 id="rm-title"></h2>'
+    '<p id="rm-what" class="sub"></p><p id="rm-note"></p><ul id="rm-list" class="plain rm-list"></ul>'
+    '<p id="rm-variants" class="warn"></p><p id="rm-undo" class="warn"></p>'
+    '<p id="rm-status" role="status"></p><div class="rm-buttons">'
+    '<button type="button" id="rm-cancel">Cancel</button>'
+    '<button type="button" id="rm-confirm" class="danger">Remove</button></div></dialog>'
 )
 
 # The served page reads the run's token from its own address, so the token
@@ -690,15 +724,19 @@ _SERVED_JS = """
   var token = new URLSearchParams(location.search).get("t") || "";
   var button = document.getElementById("rescan");
   var status = document.getElementById("served-status");
-  function call(path) {
+  function call(path, body) {
     return fetch(path, {
       method: "POST",
       headers: {"Content-Type": "application/json", "X-Modelmap-Token": token},
-      body: "{}"
+      body: JSON.stringify(body || {})
     }).then(function (response) {
-      return response.json().then(function (body) {
-        if (!response.ok) { throw new Error(body.error || response.statusText); }
-        return body;
+      return response.json().then(function (data) {
+        if (!response.ok) {
+          var error = new Error(data.error || response.statusText);
+          error.data = data;
+          throw error;
+        }
+        return data;
       });
     });
   }
@@ -710,6 +748,101 @@ _SERVED_JS = """
       button.disabled = false;
     });
   });
+
+  var dialog = document.getElementById("rm-dialog");
+  if (!dialog) { return; }
+  var confirm = document.getElementById("rm-confirm");
+  var cancel = document.getElementById("rm-cancel");
+  var rmStatus = document.getElementById("rm-status");
+  var shown = null, busy = false, stale = false;
+
+  function put(id, value) {
+    var el = document.getElementById(id);
+    el.textContent = value || "";
+    el.hidden = !value;
+  }
+  function fill(plan) {
+    shown = plan;
+    var refused = plan.action === "refuse";
+    put("rm-title", (refused ? "Cannot remove " : "Remove ") + plan.name + (refused ? "" : "?"));
+    put("rm-what", plan.store + ", " + plan.size);
+    put("rm-note", plan.note);
+    var list = document.getElementById("rm-list");
+    list.textContent = "";
+    var items = plan.command ? [plan.command] : (plan.paths.length ? plan.paths : [plan.path]);
+    items.forEach(function (item) {
+      var li = document.createElement("li"), code = document.createElement("code");
+      code.textContent = item;
+      li.appendChild(code);
+      list.appendChild(li);
+    });
+    put("rm-variants", plan.variants.length ?
+      "Also removed, with settings of their own: " + plan.variants.join(", ") : "");
+    put("rm-undo", refused ? "" : (plan.undo ?
+      "The files go to the Trash; they can be put back from there." : "This cannot be undone."));
+    put("rm-status", "");
+    confirm.hidden = refused;
+  }
+  function failed(message) {
+    shown = null;
+    put("rm-title", "Cannot remove");
+    ["rm-what", "rm-variants", "rm-undo", "rm-status"].forEach(function (id) { put(id, ""); });
+    put("rm-note", message);
+    document.getElementById("rm-list").textContent = "";
+    confirm.hidden = true;
+  }
+  function setBusy(on) {
+    busy = on;
+    confirm.disabled = on;
+    cancel.disabled = on;
+  }
+  function parentOf(view) {
+    var el = document.getElementById("v-" + view);
+    if (!el) { return ""; }
+    var pressed = document.querySelector('button[data-by][aria-pressed="true"]');
+    var by = pressed ? pressed.dataset.by : "provider";
+    return el.dataset["parent" + by.charAt(0).toUpperCase() + by.slice(1)] || el.dataset.parent || "";
+  }
+  function reloadAt(view) {
+    history.replaceState(null, "", location.pathname + location.search + (view ? "#" + view : ""));
+    location.reload();
+  }
+
+  document.addEventListener("click", function (event) {
+    var target = event.target.closest("[data-remove]");
+    if (!target) { return; }
+    target.disabled = true;
+    call("/api/plan", {view: target.dataset.remove}).then(fill, function (error) {
+      failed(error.message);
+    }).then(function () {
+      target.disabled = false;
+      setBusy(false);
+      dialog.showModal();
+      cancel.focus();
+    });
+  });
+  confirm.addEventListener("click", function () {
+    if (!shown || busy) { return; }
+    var view = shown.view;
+    setBusy(true);
+    put("rm-status", "Removing...");
+    call("/api/remove", {view: view, digest: shown.digest}).then(function () {
+      reloadAt(parentOf(view));
+    }, function (error) {
+      setBusy(false);
+      stale = true;  // the server scanned again before answering
+      var data = error.data || {};
+      if (data.gone) { reloadAt(parentOf(view)); return; }
+      if (data.plan) { fill(data.plan); }
+      put("rm-status", error.message);
+    });
+  });
+  cancel.addEventListener("click", function () { if (!busy) { dialog.close(); } });
+  dialog.addEventListener("cancel", function (event) { if (busy) { event.preventDefault(); } });
+  dialog.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") { event.stopPropagation(); }
+  });
+  dialog.addEventListener("close", function () { if (stale) { location.reload(); } });
 })();
 """
 
@@ -717,7 +850,9 @@ _SERVED_JS = """
 SCRIPTS = (_JS.strip(), _SERVED_JS.strip())
 
 
-def render_html(scan: Scan, *, use_disk: bool = False, served: bool = False) -> str:
+def render_html(
+    scan: Scan, *, use_disk: bool = False, served: bool = False, removable: bool = False
+) -> str:
     """Draw a scan as a self-contained interactive page.
 
     :param scan: The scan to draw.
@@ -725,13 +860,15 @@ def render_html(scan: Scan, *, use_disk: bool = False, served: bool = False) -> 
     :param served: Add what ``modelmap serve`` needs: a Rescan button and
         the script that calls the server. Every addition is a line of its
         own, so the page is the file ``modelmap map`` writes plus those lines.
+    :param removable: With ``served``, a Remove button in each record's
+        panel and the dialog that confirms it. The server does the removing.
     :return: The HTML text, ending with a newline.
     """
     data = build(scan, use_disk=use_disk)
     # `ollama rm` acts on the running Ollama's store: its provider roots, not
     # an Ollama store that was only recognized by its layout somewhere else.
     live = [r.resolved for r in scan.roots if r.provider == "ollama" and r.source != "layout"]
-    page = _Page(data, use_disk, live)
+    page = _Page(data, use_disk, live, removable=served and removable)
     parents: dict[int, dict[str, str]] = {i: {} for i in range(len(data.records))}
     drawn = {int(item.key) for item in data.items}
     for by in GROUPINGS:
@@ -799,6 +936,7 @@ def render_html(scan: Scan, *, use_disk: bool = False, served: bool = False) -> 
         '<p class="sub">Click a tile to open it, down to its files. Press Escape to go back up.</p>',
         "</footer>",
         '<div id="tip" hidden></div>',
+        *([_DIALOG] if served and removable else []),
         "<script>",
         _JS.strip(),
         "</script>",

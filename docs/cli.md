@@ -6,7 +6,7 @@ modelmap list      [PATH ...] [--from-json FILE] [--sort KEY] [--group KEY] [--a
 modelmap map       [PATH ...] [--from-json FILE] [-o FILE] [--svg] [--disk] [--open] [scan options]
 modelmap providers
 modelmap rm        TARGET ... [--dry-run] [-y | --yes]
-modelmap serve     [PATH ...] [--from-json FILE] [--disk] [--port N] [--no-open] [scan options]
+modelmap serve     [PATH ...] [--from-json FILE] [--disk] [--port N] [--no-open] [--read-only] [scan options]
 modelmap --version
 ```
 
@@ -82,7 +82,11 @@ what is refused.
 ## `modelmap serve`
 
 Scans, then serves the map from this machine at `127.0.0.1` and opens it
-in a browser. The page is the one `map` writes, with a Rescan button.
+in a browser. The page is the one `map` writes, with a Rescan button and,
+in each model's panel, a Remove button. Remove does what `modelmap rm`
+does, through the same code: it shows every command or path in a dialog
+and acts only when you confirm. Before acting, the server scans again and
+removes nothing if what would go has changed since the dialog opened.
 The address printed holds a token made for this run; without it the
 server answers nothing. Ctrl-C stops the server.
 
@@ -92,6 +96,7 @@ server answers nothing. Ctrl-C stops the server.
 | `--disk` | Size tiles by space allocated on disk, not by file size |
 | `--port N` | Listen on this port. The default, 0, takes any free port |
 | `--no-open` | Print the address; do not open a browser |
+| `--read-only` | Offer no Remove button. `--from-json` implies it: an inventory is not this disk as it is now |
 
 `--redact` is refused: it is for sharing a map, and the served page is
 for this machine's owner. The server listens on `127.0.0.1` only and

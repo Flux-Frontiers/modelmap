@@ -12,16 +12,20 @@ import subprocess
 import sys
 import threading
 from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from modelmap.cli import main
 from modelmap.providers.base import Context
 from modelmap.records import Scan
-from modelmap.render_html import _SERVED_CSS, SCRIPTS, render_html
+from modelmap.removal import plan
+from modelmap.render_html import _SERVED_CSS, SCRIPTS, record_view, render_html
 from modelmap.scanner import scan
-from modelmap.serve import CSP, HOST, TOKEN_HEADER, App, Server, make_server
+from modelmap.serve import CSP, HOST, TOKEN_HEADER, App, Server, make_server, plan_json
+from tests.fake_tools import Tools, install
 from tests.fakemachine import GGML_F16, FakeMachine, write_gguf
 
 
@@ -68,8 +72,9 @@ class Running:
         return self.request(method, path, headers=sent, body=body)
 
 
-@pytest.fixture
-def served(ctx: Context) -> Iterator[Running]:
+@contextmanager
+def start(ctx: Context, **options: Any) -> Iterator[Running]:
+    """Serve a scan of ``ctx`` on a free port; every rescan is kept."""
     scans = [scan(ctx)]
 
     def rescan() -> Scan:
@@ -77,13 +82,23 @@ def served(ctx: Context) -> Iterator[Running]:
         return scans[-1]
 
     log: list[str] = []
-    server = make_server(App(scans[0], rescan), 0, log.append)
+    options.setdefault("env", ctx.env)
+    options.setdefault("home", str(ctx.home))
+    server = make_server(App(scans[0], rescan, **options), 0, log.append)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    yield Running(server, scans, log)
-    server.shutdown()
-    server.server_close()
-    thread.join()
+    try:
+        yield Running(server, scans, log)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+
+@pytest.fixture
+def served(ctx: Context) -> Iterator[Running]:
+    with start(ctx) as running:
+        yield running
 
 
 def test_listens_on_loopback_only(served: Running) -> None:
@@ -95,7 +110,7 @@ def test_the_page_is_the_map_drawn_for_serving(served: Running) -> None:
     status, headers, body = served.request("GET", f"/?t={served.app.token}")
     assert status == 200
     assert headers["content-type"] == "text/html; charset=utf-8"
-    assert body.decode() == render_html(served.scans[0], served=True)
+    assert body.decode() == render_html(served.scans[0], served=True, removable=True)
     assert served.app.token not in body.decode()  # read from the address, not the page
 
 
@@ -175,7 +190,7 @@ def test_rescan_scans_again_and_redraws(served: Running, machine: FakeMachine) -
     assert len(served.scans[1].records) == len(served.scans[0].records) + 1
     assert json.loads(body)["records"] == len(served.scans[1].records)
     page = served.request("GET", f"/?t={served.app.token}")[2].decode()
-    assert page == render_html(served.scans[1], served=True)
+    assert page == render_html(served.scans[1], served=True, removable=True)
 
 
 @pytest.mark.parametrize(
@@ -334,3 +349,178 @@ def test_serve_usage_errors(
     with pytest.raises(SystemExit) as exc:
         main(argv, ctx=ctx)
     assert exc.value.code == 2
+
+
+# ---------------------------------------------------------------- removal
+
+
+@pytest.fixture
+def tools(tmp_path: Path) -> Tools:
+    return install(tmp_path / "tools", ["tiny:1b", "tiny:1b-4k", "other:latest"])
+
+
+@pytest.fixture
+def removing(machine: FakeMachine, tools: Tools) -> Iterator[Running]:
+    ctx = Context(home=machine.home, env=tools.env("trash", "ollama", "hf"), platform="darwin")
+    with start(ctx) as running:
+        yield running
+
+
+def _view(running: Running, label: str) -> str:
+    (record,) = [r for r in running.app.scan.records if f"{r.provider}:{r.name}" == label]
+    return record_view(record)
+
+
+def _plan(running: Running, label: str) -> dict[str, Any]:
+    status, _, body = running.api(
+        "POST", "/api/plan", json.dumps({"view": _view(running, label)}).encode()
+    )
+    assert status == 200, body
+    return json.loads(body)
+
+
+def _remove(running: Running, view: str, digest: str, **headers: str) -> tuple[int, dict[str, Any]]:
+    body = json.dumps({"view": view, "digest": digest}).encode()
+    status, _, data = running.api("POST", "/api/remove", body, **headers)
+    return status, json.loads(data)
+
+
+def test_plans_are_the_ones_rm_makes(removing: Running, tools: Tools) -> None:
+    # Same function, same inputs: the running Ollama's stores, the PATH, home.
+    app = removing.app
+    live = [r.resolved for r in app.scan.roots if r.provider == "ollama" and r.source != "layout"]
+    for record in app.scan.records:
+        expected = plan_json(plan(record, live, env=app.env, home=app.home), record_view(record))
+        body = json.dumps({"view": record_view(record)}).encode()
+        assert json.loads(removing.api("POST", "/api/plan", body)[2]) == expected
+    actions = {
+        _plan(removing, label)["action"] for label in ("generic:models/loose", "ollama:tiny:1b")
+    }
+    assert actions == {"trash", "tool"}
+
+
+def test_removing_a_loose_file(removing: Running, machine: FakeMachine, tools: Tools) -> None:
+    shown = _plan(removing, "generic:models/loose")
+    assert shown["paths"] == [str(machine.files["loose"])]
+    assert shown["undo"] is True and shown["command"] == ""
+    status, reply = _remove(removing, shown["view"], shown["digest"])
+    assert status == 200, reply
+    assert reply["removed"] and "Trash" in reply["message"]
+    assert not machine.files["loose"].exists()
+    assert (tools.trash / "loose.gguf").exists()
+    # Scanned again before and after: the page no longer has the record.
+    assert len(removing.scans) == 3
+    assert reply["state"]["records"] == len(removing.scans[-1].records)
+    page = removing.request("GET", f"/?t={removing.app.token}")[2].decode()
+    assert shown["view"] not in page
+    assert any(line.startswith("removing generic:models/loose") for line in removing.log)
+    assert not any(removing.app.token in line for line in removing.log)
+
+
+def test_removing_an_ollama_model_names_every_tag(removing: Running, tools: Tools) -> None:
+    shown = _plan(removing, "ollama:tiny:1b")
+    assert shown["command"] == "ollama rm tiny:1b tiny:1b-4k"
+    assert shown["variants"] == ["tiny:1b", "tiny:1b-4k"]
+    assert shown["undo"] is False
+    status, reply = _remove(removing, shown["view"], shown["digest"])
+    assert status == 200, reply
+    assert tools.tags.read_text() == "other:latest\n"
+
+
+def test_a_plan_that_changed_is_not_carried_out(removing: Running, machine: FakeMachine) -> None:
+    folder = machine.omlx_models / "acme" / "Sharded"
+    shown = _plan(removing, "omlx:acme/Sharded")
+    assert shown["paths"] == [str(folder)]
+    # Between the dialog and the click, the folder gains a file of someone else's.
+    (folder / "notes.txt").write_text("mine\n")
+    status, reply = _remove(removing, shown["view"], shown["digest"])
+    assert status == 409
+    assert reply["plan"]["digest"] != shown["digest"]
+    assert folder.is_dir() and (folder / "notes.txt").exists()
+
+
+def test_a_wrong_digest_removes_nothing(removing: Running, machine: FakeMachine) -> None:
+    shown = _plan(removing, "generic:models/loose")
+    status, reply = _remove(removing, shown["view"], "0" * 64)
+    assert status == 409 and reply["plan"]["digest"] == shown["digest"]
+    assert machine.files["loose"].exists()
+
+
+def test_a_refused_record_is_refused_by_the_server_too(removing: Running) -> None:
+    caches = [r for r in removing.app.scan.records if r.kind == "cache"]
+    assert caches
+    view = record_view(caches[0])
+    shown = json.loads(removing.api("POST", "/api/plan", json.dumps({"view": view}).encode())[2])
+    assert shown["action"] == "refuse"
+    status, reply = _remove(removing, view, shown["digest"])
+    assert status == 409 and reply["error"] == shown["note"]
+
+
+def test_a_record_already_gone(removing: Running, machine: FakeMachine) -> None:
+    shown = _plan(removing, "generic:models/loose")
+    machine.files["loose"].unlink()
+    status, reply = _remove(removing, shown["view"], shown["digest"])
+    assert status == 409 and reply["gone"] is True
+    assert removing.api("POST", "/api/plan", json.dumps({"view": "rec-nothing"}).encode())[0] == 404
+
+
+def test_a_failed_removal_says_why_and_redraws(removing: Running, tools: Tools) -> None:
+    shown = _plan(removing, "generic:models/loose")
+    tools.trash.rmdir()  # the stand-in's `mv` into the Trash now fails
+    status, reply = _remove(removing, shown["view"], shown["digest"])
+    assert status == 500
+    assert reply["error"].startswith("Could not remove models/loose")
+    assert "state" in reply
+    assert any(line.startswith("failed:") for line in removing.log)
+
+
+def test_one_removal_at_a_time(removing: Running, machine: FakeMachine) -> None:
+    shown = _plan(removing, "generic:models/loose")
+    with removing.app.lock:
+        status, reply = _remove(removing, shown["view"], shown["digest"])
+    assert status == 409 and "Busy" in reply["error"]
+    assert machine.files["loose"].exists()
+
+
+@pytest.mark.parametrize(
+    "body",
+    [{}, {"view": "x"}, {"digest": "x"}, {"view": 1, "digest": "x"}, {"view": "x", "digest": None}],
+)
+def test_removal_needs_a_view_and_a_digest(removing: Running, body: dict[str, Any]) -> None:
+    assert removing.api("POST", "/api/remove", json.dumps(body).encode())[0] == 400
+    assert removing.api("POST", "/api/plan", json.dumps({"view": 1}).encode())[0] == 404
+
+
+def test_removal_is_refused_without_the_token_or_from_another_page(
+    removing: Running, machine: FakeMachine
+) -> None:
+    shown = _plan(removing, "generic:models/loose")
+    body = json.dumps({"view": shown["view"], "digest": shown["digest"]}).encode()
+    headers = {"Content-Type": "application/json"}
+    assert removing.request("POST", "/api/remove", headers=headers, body=body)[0] == 403
+    assert (
+        _remove(removing, shown["view"], shown["digest"], Origin="https://evil.example")[0] == 403
+    )
+    assert machine.files["loose"].exists()
+
+
+def test_read_only_serves_no_removal(machine: FakeMachine, tools: Tools) -> None:
+    ctx = Context(home=machine.home, env=tools.env("trash"), platform="darwin")
+    with start(ctx, read_only=True) as running:
+        page = running.request("GET", f"/?t={running.app.token}")[2].decode()
+        assert 'data-remove="' not in page and 'id="rm-dialog"' not in page
+        assert "The page itself deletes nothing" in page
+        shown = _plan(running, "generic:models/loose")  # a plan only describes
+        assert _remove(running, shown["view"], shown["digest"])[0] == 403
+    assert machine.files["loose"].exists()
+
+
+def test_the_page_offers_remove_only_where_rm_would(removing: Running) -> None:
+    page = removing.request("GET", f"/?t={removing.app.token}")[2].decode()
+    buttons = set(re.findall(r'data-remove="([^"]+)"', page))
+    assert page.count('id="rm-dialog"') == 1
+    app = removing.app
+    live = [r.resolved for r in app.scan.roots if r.provider == "ollama" and r.source != "layout"]
+    for record in app.scan.records:
+        refused = plan(record, live, check_disk=False).action == "refuse"
+        assert (record_view(record) in buttons) is not refused, record.name

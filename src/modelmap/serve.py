@@ -12,8 +12,14 @@ Routes:
 - ``GET /?t=TOKEN``: the page, drawn by :func:`render_html` with ``served``.
 - ``GET /api/state``: when the scan ran and what it found, in totals.
 - ``POST /api/rescan``: scan again and redraw the page.
+- ``POST /api/plan`` ``{"view"}``: what removing that record would do, as
+  :func:`modelmap.removal.plan` works it out, with a digest of the plan.
+- ``POST /api/remove`` ``{"view", "digest"}``: scan again, plan again, and
+  remove the record only if the new plan's digest is the one the person
+  was shown. Then scan again and redraw.
 
-The page is drawn once per scan and kept, so loading it does not scan.
+Removal is what ``modelmap rm`` does, through the same functions; one runs at
+a time. The page is drawn once per scan and kept, so loading it does not scan.
 """
 
 from __future__ import annotations
@@ -22,16 +28,21 @@ import base64
 import hashlib
 import hmac
 import json
+import os
 import secrets
+import shlex
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, cast
 from urllib.parse import parse_qs, urlsplit
 
-from modelmap.records import Scan
-from modelmap.render_html import SCRIPTS, render_html
+from modelmap.records import ModelRecord, Scan
+from modelmap.removal import TRASH_NOTE, Plan, execute, plan, plan_digest
+from modelmap.render_html import SCRIPTS, record_view, render_html
+from modelmap.render_svg import DISPLAY_NAMES
+from modelmap.units import format_size
 
 HOST = "127.0.0.1"
 TOKEN_HEADER = "X-Modelmap-Token"
@@ -58,6 +69,10 @@ class App:
     :param scanner: Makes a new scan; called by a rescan.
     :param use_disk: Size tiles by bytes allocated on disk.
     :param token: The run's token; a random one by default.
+    :param env: Environment whose ``PATH`` finds ``hf``, ``ollama`` and the
+        Trash command; the process's own by default.
+    :param home: The home folder of the machine scanned.
+    :param read_only: Offer no removal: for an inventory, or on request.
     """
 
     def __init__(
@@ -67,16 +82,24 @@ class App:
         *,
         use_disk: bool = False,
         token: str | None = None,
+        env: Mapping[str, str] | None = None,
+        home: str = "~",
+        read_only: bool = False,
     ) -> None:
         self.scanner = scanner
         self.use_disk = use_disk
         self.token = token or secrets.token_urlsafe(32)
+        self.env = os.environ if env is None else env
+        self.home = home
+        self.read_only = read_only
         #: Held while the scan changes; a second request is told to wait.
         self.lock = threading.Lock()
         self._set(scan)
 
     def _set(self, scan: Scan) -> None:
-        page = render_html(scan, use_disk=self.use_disk, served=True).encode("utf-8")
+        page = render_html(
+            scan, use_disk=self.use_disk, served=True, removable=not self.read_only
+        ).encode("utf-8")
         self.scan, self.page, self.scanned_at = scan, page, time.time()
 
     def rescan(self) -> None:
@@ -97,6 +120,72 @@ class App:
 
     def token_ok(self, given: str) -> bool:
         return hmac.compare_digest(given.encode("utf-8"), self.token.encode("utf-8"))
+
+    def find(self, view: str) -> ModelRecord | None:
+        """The record a view id names in the current scan, if exactly one."""
+        found = [r for r in self.scan.records if record_view(r) == view]
+        return found[0] if len(found) == 1 else None
+
+    def plan(self, record: ModelRecord) -> Plan:
+        """How ``modelmap rm`` would remove the record, looking at the disk."""
+        # `ollama rm` acts on the running Ollama's store only.
+        live = [
+            r.resolved for r in self.scan.roots if r.provider == "ollama" and r.source != "layout"
+        ]
+        return plan(record, live, env=self.env, home=self.home)
+
+    def remove(self, view: str, digest: str, log: Callable[[str], None]) -> tuple[int, dict]:
+        """Remove a record if it would go as shown. The caller holds :attr:`lock`.
+
+        :return: HTTP status and the reply.
+        """
+        self.rescan()
+        record = self.find(view)
+        if record is None:
+            return 409, {"error": "It is no longer in the scan.", "gone": True}
+        step = self.plan(record)
+        shown = plan_json(step, view)
+        if step.action == "refuse":
+            return 409, {"error": step.note, "plan": shown}
+        if plan_digest(step) != digest:
+            return 409, {
+                "error": "What would be removed has changed since it was shown. "
+                "Check the list again.",
+                "plan": shown,
+            }
+        what = shown["command"] or ", ".join(step.paths)
+        log(f"removing {record.provider}:{record.name}: {what}")
+        done, problem = execute(step, self.env)
+        log(f"removed {record.provider}:{record.name}" if done else f"failed: {problem}")
+        self.rescan()  # whatever happened, show the disk as it is now
+        if not done:
+            return 500, {
+                "error": f"Could not remove {record.name}: {problem}",
+                "state": self.state(),
+            }
+        message = f"Removed {record.name}."
+        if step.action == "trash":
+            message += " " + TRASH_NOTE
+        return 200, {"removed": True, "message": message, "state": self.state()}
+
+
+def plan_json(step: Plan, view: str) -> dict[str, Any]:
+    """A plan as the page shows it in the dialog."""
+    record = step.record
+    return {
+        "view": view,
+        "name": record.name,
+        "store": DISPLAY_NAMES.get(record.provider, record.provider),
+        "size": format_size(record.size_bytes),
+        "path": record.path,
+        "action": step.action,
+        "note": step.note,
+        "command": shlex.join(step.argv) if step.action == "tool" else "",
+        "paths": list(step.paths),
+        "variants": list(step.variants),
+        "undo": step.action == "trash",
+        "digest": plan_digest(step),
+    }
 
 
 class Server(ThreadingHTTPServer):
@@ -208,21 +297,42 @@ class Handler(BaseHTTPRequestHandler):
             self._error(400, "Send a JSON object.")
             return
 
-        if urlsplit(self.path).path != "/api/rescan":
+        route = urlsplit(self.path).path
+        if route == "/api/plan":
+            view = body.get("view")
+            record = app.find(view) if isinstance(view, str) else None
+            if record is None:
+                self._error(404, "No such model in this scan. Reload the page.")
+                return
+            self._json(200, plan_json(app.plan(record), view))
+            return
+        if route not in ("/api/rescan", "/api/remove"):
             self._error(404, "Not found.")
             return
+        if route == "/api/remove":
+            if app.read_only:
+                self._error(403, "This server is read-only.")
+                return
+            view, digest = body.get("view"), body.get("digest")
+            if not (isinstance(view, str) and isinstance(digest, str)):
+                self._error(400, "Send the view and the digest of the plan shown.")
+                return
         if not app.lock.acquire(blocking=False):
-            self._error(409, "Busy: a scan is running. Try again when it ends.")
+            self._error(409, "Busy: a scan or removal is running. Try again when it ends.")
             return
         try:
-            app.rescan()
+            if route == "/api/remove":
+                code, reply = app.remove(view, digest, self.owner.log)
+            else:
+                app.rescan()
+                code, reply = 200, app.state()
         except (OSError, ValueError) as exc:  # an inventory file gone or broken; the old page stays
-            self.owner.log(f"rescan failed: {exc!r}")
+            self.owner.log(f"scan failed: {exc!r}")
             self._error(500, "The scan failed; the terminal running modelmap serve says why.")
             return
         finally:
             app.lock.release()
-        self._json(200, app.state())
+        self._json(code, reply)
 
 
 def make_server(app: App, port: int = 0, log: Callable[[str], None] | None = None) -> Server:

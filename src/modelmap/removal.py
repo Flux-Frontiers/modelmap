@@ -24,6 +24,7 @@ tags the running Ollama lists.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import shlex
 import shutil
@@ -299,6 +300,28 @@ def plan(
         count = len(paths)
         note = f"Moves {'the file' if count == 1 else f'{count} files'} to the Trash."
     return Plan(record, "trash", note, paths=paths)
+
+
+def plan_digest(step: Plan) -> str:
+    """A fingerprint of everything a plan would do and the files it covers.
+
+    ``modelmap serve`` shows a plan, then plans again from a new scan before
+    acting; the two digests must match, so what goes is what was shown.
+    """
+    record = step.record
+    parts = [
+        step.action,
+        record.provider,
+        record.path,
+        *step.argv,
+        "",
+        *step.paths,
+        "",
+        *step.variants,
+        "",
+        *(f"{entry.path}\t{entry.size_bytes}" for entry in record.file_list),
+    ]
+    return hashlib.sha256("\x1f".join(parts).encode("utf-8", "surrogateescape")).hexdigest()
 
 
 def find(records: Sequence[ModelRecord], target: str) -> list[ModelRecord]:

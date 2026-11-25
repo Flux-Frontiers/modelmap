@@ -264,6 +264,9 @@ def _parser() -> argparse.ArgumentParser:
     serve_cmd.add_argument(
         "--no-open", action="store_true", help="print the address; do not open a browser"
     )
+    serve_cmd.add_argument(
+        "--read-only", action="store_true", help="offer no Remove button; --from-json implies it"
+    )
 
     commands.add_parser("providers", help="show where each store is looked for")
 
@@ -329,7 +332,17 @@ def _serve(args: argparse.Namespace, ctx: Context, out: TextIO, result: Scan) ->
         print(_text(line), file=out, flush=True)
 
     try:
-        server = make_server(App(result, rescan, use_disk=args.disk), args.port, log)
+        app = App(
+            result,
+            rescan,
+            use_disk=args.disk,
+            env=ctx.env,
+            home=str(ctx.home),
+            # An inventory describes another machine's disk, or this one's at
+            # another time: nothing in it is removed.
+            read_only=args.read_only or bool(args.from_json),
+        )
+        server = make_server(app, args.port, log)
     except OSError as exc:
         print(f"Cannot listen on 127.0.0.1 port {args.port}: {exc.strerror or exc}", file=out)
         return 1

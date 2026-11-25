@@ -53,6 +53,13 @@ classifiers = [
 requires-python = ">=3.10"
 dependencies = []
 
+[project.urls]
+Homepage = "https://github.com/Flux-Frontiers/modelmap"
+Repository = "https://github.com/Flux-Frontiers/modelmap"
+Documentation = "https://github.com/Flux-Frontiers/modelmap/blob/main/docs/guide.md"
+Issues = "https://github.com/Flux-Frontiers/modelmap/issues"
+Changelog = "https://github.com/Flux-Frontiers/modelmap/blob/main/CHANGELOG.md"
+
 [project.scripts]
 modelmap = "modelmap.cli:main"
 

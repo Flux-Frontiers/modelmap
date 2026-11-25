@@ -32,7 +32,7 @@ packages = [{ include = "modelmap", from = "src" }]
 # ---------------------------------------------------------------------------
 [project]
 name = "modelmap"
-version = "0.1.0"
+version = "0.2.0"
 description = "Find local LLM model files across Hugging Face, Ollama, oMLX, LM Studio and llama.cpp, and draw them as a treemap"
 readme = "README.md"
 license = "BSD-3-Clause"

@@ -1,46 +1,48 @@
-# Release Notes: v0.1.0
+# Release Notes: v0.2.0
 
-> Released: 2026-11-24
+> Released: 2026-11-25
 
-First release. modelmap finds the language-model files on a machine, shows
-how much space each one takes, draws them as a map you can open down to the
-individual files, and removes the ones you choose.
+modelmap can now remove models from the map itself. `modelmap serve`
+scans, serves the map from your own machine, and gives each model a
+Remove button that does exactly what `modelmap rm` does: it shows every
+command or file that would go, waits for you to confirm, and checks
+again before acting.
 
-## What it does
+## What changed
 
-**Finds models wherever the tools keep them.** It reads the stores of
-Hugging Face, Ollama, oMLX, LM Studio, llama.cpp, GPT4All, Jan and Whisper,
-follows the settings, environment variables and symlinks that move them,
-and sweeps your home folder for loose GGUF, safetensors and checkpoint
-files. Any other folder, drive or single file can be named on the command
-line.
+**The map as a local app.** `modelmap serve` opens the same map in your
+browser, served from `127.0.0.1`, with a Rescan button and a Remove
+button on each model. The Remove dialog lists the command or every path,
+any Ollama tags that go with the model, and whether the removal can be
+undone from the Trash. When you confirm, the server scans and plans
+again; if anything has changed since the dialog opened, it removes
+nothing and shows the new list. After a removal the map is redrawn from
+a fresh scan.
 
-**Counts honestly.** Model files are identified by their headers, which
-give parameter counts and quantization without reading weights. A file
-reached by several names, such as a Hugging Face blob shared by two
-revisions or Ollama weights shared by several tags, is counted once, so
-totals match what the disk holds.
+**Built to be safe on a shared browser.** The server listens only on
+this machine, answers only to its own page, and needs a token made for
+each run, which it never writes into the page or the log. A page on
+another site cannot read the map or ask it to remove anything. Serving an
+inventory from another machine, or adding `--read-only`, turns removal
+off.
 
-**Draws a map.** `modelmap map` writes one page that works offline: a
-square divided among everything found, one block per store. Clicking a
-model redraws the square as its files, with each file's path, the other
-models that share it, and the command that removes it.
+**A face and a home.** modelmap has its own Art Techno logo, a treemap
+drawn as a chip floorplan, and every page opens with a banner showing the
+version and a link to Flux-Frontiers. The documentation is now a site at
+https://flux-frontiers.github.io/modelmap/, with the guide, the command
+reference, the cheat sheet and an API reference.
 
-**Removes models safely.** `modelmap rm` shows every file or command it
-would act on and asks first. Ollama models are removed with `ollama rm`,
-Hugging Face cache repositories with `hf cache rm`, and anything else moves
-to the Trash. It refuses caches, files that another model also uses, and
-model folders that hold anything else.
+**A fix for repeated scans.** A second scan in the same process
+undercounted, because the first scan's bookkeeping carried over. The
+command line scans once, so earlier results were right; the server
+rescans, and now each scan starts fresh.
 
-**Works across machines.** `modelmap scan --json --redact` makes an
-inventory without the home folder or machine name in it, and
-`modelmap map --from-json` draws it elsewhere.
+## Upgrading
 
-## Installing
-
-modelmap needs Python 3.10 or later and nothing beyond the standard
-library. It is not on PyPI yet; install from a clone with `pip install .`,
-or from the wheel attached to this release.
+Install or upgrade from PyPI with `pipx install modelmap` (or
+`pip install -U modelmap`). Nothing needs migrating; inventories made by
+0.1.0 still load. Try `modelmap serve`, or `modelmap serve --read-only`
+to look without the Remove buttons.
 
 ---
 

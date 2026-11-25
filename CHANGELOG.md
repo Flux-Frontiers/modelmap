@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-25
+
+### Added
+
+- **`modelmap serve`.** Scans, then serves the map from `127.0.0.1` and
+  opens it in a browser, until Ctrl-C. The page has a Rescan button and,
+  in each model's panel, a Remove button that does what `modelmap rm`
+  does, through the same code: a dialog lists the command or every path,
+  any Ollama tags removed with the model, and whether the removal can be
+  undone; nothing happens until it is confirmed. Before acting the server
+  scans and plans again, and removes nothing if what would go has changed.
+  One removal runs at a time. `--read-only` offers no removal, and
+  `--from-json` implies it; `--port` and `--no-open` set where and how it
+  starts.
+- **Safety of the server.** It answers only to requests that name it by
+  its own address, come from its own page, and carry a token made for the
+  run; the token is never written into the page or the log. A
+  Content-Security-Policy allows only the page's own scripts, by hash, and
+  forbids framing.
+- **Branding.** An Art Techno logo, the floorplan (a treemap drawn as a
+  chip floorplan, laid out by modelmap's own code), written with its icon,
+  banner and favicons by `scripts/build_logo.py`. Every page opens with a
+  banner showing the version and a link to Flux-Frontiers, and uses the
+  icon as its tab icon.
+- **Documentation site** at https://flux-frontiers.github.io/modelmap/,
+  built with mkdocs and Material: the guide, the command reference, the
+  cheat sheet and an API reference. The guide gains a section on serving
+  the map.
+- **Release to PyPI** from the tag, by trusted publishing, with the same
+  files as the GitHub Release.
+
+### Changed
+
+- Views of the map are named from a record's store and path and a group's
+  name, not their position, so an address opens the same view after the
+  map is redrawn.
+- The README installs from PyPI and links the documentation site.
+
+### Fixed
+
+- A second scan in one process found every file already counted by the
+  first and lost the unreferenced-blob records. Each scan now starts with
+  its own ledger, warnings and file uses. The command line scans once per
+  run, so 0.1.0 was not affected in practice.
+
 ## [0.1.0] - 2026-11-24
 
 First release.

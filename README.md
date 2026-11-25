@@ -1,7 +1,14 @@
-# modelmap
+[![CI](https://github.com/Flux-Frontiers/modelmap/actions/workflows/ci.yml/badge.svg)](https://github.com/Flux-Frontiers/modelmap/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://www.python.org/)
+[![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://github.com/Flux-Frontiers/modelmap/blob/main/LICENSE)
+[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/Flux-Frontiers/modelmap/releases)
+[![Poetry](https://img.shields.io/endpoint?url=https://python-poetry.org/badge/v0.json)](https://python-poetry.org/)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://pre-commit.com/)
+[![ORCID](https://img.shields.io/badge/ORCID-0009--0009--0891--1507-A6CE39.svg)](https://orcid.org/0009-0009-0891-1507)
 
-Find the language-model files on a machine, see how much space each one
-takes, and remove the ones you no longer need.
+# modelmap -- Find, Map and Remove Local LLM Models
+
+**See every language-model file on a machine, how much space each one takes, and remove the ones you no longer need.**
 
 modelmap reads the stores of Hugging Face, Ollama, oMLX, LM Studio,
 llama.cpp, GPT4All, Jan and Whisper, follows the settings and symlinks
@@ -51,10 +58,10 @@ modelmap map --from-json inventory.json --open     # on yours
 
 ## Documentation
 
-- [Guide](docs/guide.md): what is scanned, how sizes are counted, the map,
+- [Guide](https://github.com/Flux-Frontiers/modelmap/blob/main/docs/guide.md): what is scanned, how sizes are counted, the map,
   removing models, and the limits.
-- [Command reference](docs/cli.md): every command and option.
-- [Cheat sheet](docs/cheatsheet.md): one page.
+- [Command reference](https://github.com/Flux-Frontiers/modelmap/blob/main/docs/cli.md): every command and option.
+- [Cheat sheet](https://github.com/Flux-Frontiers/modelmap/blob/main/docs/cheatsheet.md): one page.
 
 ## Development
 
@@ -63,6 +70,26 @@ poetry install --with dev
 .venv/bin/pytest
 ```
 
+## Citation
+
+If you use modelmap in your research or project, please cite it:
+
+> Suchanek, E. G. (2026). *modelmap: Find, Map and Remove Local LLM Models* (Version 0.1.0) [Software]. Flux-Frontiers. https://github.com/Flux-Frontiers/modelmap
+
+```bibtex
+@software{suchanek_modelmap,
+  author    = {Suchanek, Eric G.},
+  title     = {{modelmap}: Find, Map and Remove Local LLM Models},
+  version   = {0.1.0},
+  year      = {2026},
+  publisher = {Flux-Frontiers},
+  url       = {https://github.com/Flux-Frontiers/modelmap},
+}
+```
+
+The citation metadata is also in [CITATION.cff](https://github.com/Flux-Frontiers/modelmap/blob/main/CITATION.cff). See the
+[changelog](https://github.com/Flux-Frontiers/modelmap/blob/main/CHANGELOG.md) for release history.
+
 ## License
 
-BSD-3-Clause. See [LICENSE](LICENSE).
+BSD-3-Clause. See [LICENSE](https://github.com/Flux-Frontiers/modelmap/blob/main/LICENSE).

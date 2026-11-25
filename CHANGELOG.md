@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Documentation.** A guide (what is scanned, how sizes are counted, the
+  map, removing models, limits), a command reference and a cheat sheet in
+  `docs/`, and README screenshots made from example data. A test keeps
+  every command, option and store named in them.
 - **The interactive map.** `modelmap map` writes one page that works
   offline. Clicking a tile opens the model and redraws the square as its
   individual files; clicking a store shows only that store. The page can

@@ -1,128 +1,60 @@
 # modelmap
 
-Find the LLM model files on a machine and report them by size.
+Find the language-model files on a machine, see how much space each one
+takes, and remove the ones you no longer need.
 
 modelmap reads the stores of Hugging Face, Ollama, oMLX, LM Studio,
 llama.cpp, GPT4All, Jan and Whisper, follows the settings and symlinks
-that move them, and sweeps the home directory for loose GGUF, safetensors
-and checkpoint files. It identifies files by their headers, reports
-parameter counts and quantization, and counts a file once however many
-names point at it.
+that move them, and sweeps your home folder for loose GGUF, safetensors
+and checkpoint files. It reads file headers for parameter counts and
+quantization, counts each file once however many names point at it, and
+draws everything as a map you can open down to the individual files.
 
-Status: pre-alpha, not yet released.
+<img src="https://raw.githubusercontent.com/Flux-Frontiers/modelmap/main/assets/map.png" alt="The map: one block per store, one tile per model, sized by space used" width="760">
+
+Status: pre-alpha, not yet released. It runs on macOS and Linux with
+Python 3.10 or later and needs nothing beyond the standard library.
+
+## Install
+
+From a clone:
+
+```bash
+pip install .
+```
 
 ## Use
 
 ```bash
-modelmap map --open           # the map: one page, opened in your browser
-modelmap scan                 # summary by provider
-modelmap list                 # every model, largest first
-modelmap providers            # where each store is looked for
-modelmap rm ollama:qwen3:4b   # remove a model, after showing what goes
+modelmap map --open             # the map, opened in your browser
+modelmap scan                   # totals by store
+modelmap list                   # every model, largest first
+modelmap providers              # where each store is looked for
+modelmap rm ollama:qwen3:4b     # remove a model, after showing what goes and asking
 ```
 
-### The map
+On the map, click a tile to open the model; the square is redrawn as its
+files, with each file's path and the `modelmap rm` command beside it.
+Escape goes back up.
 
-`modelmap map` writes `modelmap.html`, a single page that works offline. A
-square is divided among everything found, by size, with one block per
-store.
+`modelmap rm` removes Ollama models with `ollama rm`, Hugging Face cache
+repositories with `hf cache rm`, and moves anything else to the Trash. It
+shows every file or command first, asks, and refuses caches and files
+that another model also uses.
 
-- Click a tile to open the model. The square is redrawn as that model's
-  individual files, and each file's full path is listed beside it.
-- Click a store's name in the list beside the map, or a "smaller" tile, to
-  see only that store.
-- Press Escape, or use the trail above the map, to go back up.
-- Group by store, format, family or kind, and filter by name.
-
-For each model the page shows where it is, which other models use the
-same files, and the `modelmap rm` command that removes it, ready to copy.
-The page itself deletes nothing.
-
-### Removing models
-
-```bash
-modelmap rm --dry-run ollama:qwen3:4b    # show what would go
-modelmap rm ollama:qwen3:4b              # show it, ask, then remove
-modelmap rm ~/models/old.gguf --yes      # a path works too; --yes skips the question
-```
-
-A target is the `provider:name` that `modelmap list` shows, an Ollama tag,
-or a path. When two entries share a name, `rm` lists their paths and
-removes neither; name one by its path.
-
-- Ollama models are removed with `ollama rm`, giving every tag that points
-  at the same weights, since Ollama frees the space only when all of them
-  are gone. When those tags differ in their settings (a longer context
-  made with `ollama create`, for example), the plan names them, and with
-  `--yes` each must be named on the command line. `ollama rm` acts on the
-  Ollama that is running, so a copy of an Ollama store elsewhere is
-  refused.
-- Hugging Face cache repositories are removed with `hf cache rm`.
-- Everything else moves to the Trash (`trash` on macOS; `trash` or `gio
-  trash` on Linux). A model folder moves whole, and is refused when it
-  also holds something that is not part of the model, such as a `.git`
-  checkout. Loose files move one by one.
-- Refused, and nothing is removed: caches, files nothing refers to (for
-  Hugging Face, `hf cache prune` handles those), any model whose files
-  another model also uses, and a repository that a file elsewhere links
-  into.
-
-Each run scans first, shows every file or command, and asks. When one
-target is refused, none is removed. Space moved to the Trash is freed
-when the Trash is emptied.
-
-"Used by" is known only among what the scan covered. After `--only` or
-`--no-defaults`, a file can show no other user and still have one in a
-store that was not scanned. An inventory is read as it is: redact it when
-you make it (`scan --json --redact`), not when you map it.
-
-`modelmap map --svg` writes a static picture of the top level instead.
-
-To scan somewhere else, name it. The path can be a directory, a single
-model directory, or a single file:
-
-```bash
-modelmap list /Volumes/External
-modelmap scan --no-defaults ~/Downloads/model.gguf
-```
-
-To look at a machine you cannot reach, ask its owner for an inventory:
+To map a machine you cannot reach, ask its owner for an inventory:
 
 ```bash
 modelmap scan --json --redact > inventory.json     # on their machine
 modelmap map --from-json inventory.json --open     # on yours
 ```
 
-`--redact` replaces the home directory with `~` and drops the host name.
+## Documentation
 
-### What the scan does and does not do
-
-- It reads file headers only, never weights, and changes nothing on disk.
-- It sends nothing anywhere.
-- It does not open a model file that is a cloud placeholder (iCloud Drive
-  and similar), because that would download it. Such a file is listed by
-  size with a note.
-- A file it cannot read becomes a warning. The scan continues.
-- The first scan after a restart is slower, because the directory walk is
-  not yet in the file cache.
-
-### Options
-
-| Option | Effect |
-|--------|--------|
-| `PATH ...` | Scan these files or directories as well |
-| `--no-defaults` | Scan only the given paths |
-| `--no-sweep` | Skip the sweep of the home directory |
-| `--only NAMES` | Run only these providers, for example `hf,ollama` |
-| `--exclude GLOB` | Skip matching files and directories; repeatable |
-| `--max-depth N` | Levels to descend below each given path |
-| `--min-size SIZE` | Smallest checkpoint to list when only its extension says it is a model (default `50MB`) |
-| `--redact` | Hide the home directory and host name |
-| `--strict` | Exit with status 1 if anything could not be read |
-| `--json` (`scan`) | Print the inventory as JSON |
-| `--from-json FILE` (`list`, `map`) | Read an inventory instead of scanning |
-| `-o FILE`, `--svg`, `--disk`, `--open` (`map`) | Where to write; a static picture; size by space on disk; open in a browser |
-| `--sort`, `--group`, `--all` (`list`) | Order, grouping, and whether datasets and caches are shown |
+- [Guide](docs/guide.md): what is scanned, how sizes are counted, the map,
+  removing models, and the limits.
+- [Command reference](docs/cli.md): every command and option.
+- [Cheat sheet](docs/cheatsheet.md): one page.
 
 ## Development
 

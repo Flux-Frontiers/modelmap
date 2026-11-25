@@ -287,7 +287,7 @@ def plan(
     if not record.file_list:
         return _refuse(record, "The record has no files.")
     if not check_disk:
-        return Plan(record, "trash", "Moves its files to the Trash, after listing them and asking.")
+        return Plan(record, "trash", "Moves its files to the Trash.")
     if not trash_command(env):
         return _refuse(record, "No command to move files to the Trash was found.")
     paths, reason = _trash_paths(record, os.path.expanduser(home))

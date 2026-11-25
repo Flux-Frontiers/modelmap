@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The `modelmap` command.** `modelmap scan` scans the known stores and
+  sweeps the home directory for loose models, then prints a summary by
+  provider, or the whole inventory with `--json`. `modelmap list` prints
+  every model, sorted and grouped, from a scan or from an inventory file
+  made on another machine (`--from-json`). `modelmap providers` shows where
+  each store is looked for and which setting chose the location.
+- **Scanning any path.** A named path may be a directory, one model
+  directory, or one file. A path that is an Ollama store or a Hugging Face
+  cache, or contains one, is read by that provider. A directory is scanned
+  once however many names lead to it.
+- **`--redact`.** Replaces the home directory with `~` and drops the host
+  name, for an inventory you send to someone else.
+- **No downloads.** A model file that is a cloud placeholder (iCloud Drive
+  and similar) is listed by size and not opened, since opening it would
+  fetch it.
 - **Providers.** `modelmap.providers` finds models in the Hugging Face hub
   cache (including the store shared between repositories and the Xet
   cache), Ollama, oMLX, LM Studio, llama.cpp, GPT4All, Jan and Whisper, and

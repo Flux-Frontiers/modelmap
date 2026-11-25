@@ -12,7 +12,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from modelmap.headers import read_gguf, read_safetensors
+from modelmap.headers import open_local, read_gguf, read_safetensors
 
 # Extensions that mark a weights file when no header can confirm it.
 PICKLE_EXTENSIONS = frozenset({".bin", ".pt", ".pth", ".ckpt"})
@@ -128,7 +128,7 @@ def describe_gguf(paths: Iterable[str]) -> Description:
 def read_quantization(directory: str) -> Mapping[str, Any] | None:
     """The ``quantization`` object of a model directory's ``config.json``."""
     try:
-        with open(os.path.join(directory, "config.json"), encoding="utf-8") as fh:
+        with open_local(os.path.join(directory, "config.json")) as fh:
             config = json.load(fh)
     except (OSError, ValueError):
         return None

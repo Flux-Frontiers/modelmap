@@ -92,6 +92,24 @@ _FILE_TYPE_GUESSED = 1024  # LlamaFileType.GUESSED: not specified in the file
 _PACKED_DTYPES = {"U8": 8, "U16": 16, "U32": 32, "U64": 64}
 
 
+# macOS sys/stat.h SF_DATALESS: the content is in the cloud, not on disk.
+_SF_DATALESS = 0x40000000
+
+
+def open_local(path: str | os.PathLike[str]) -> BinaryIO:
+    """Open a file for reading, unless reading would download it.
+
+    iCloud Drive and other file providers leave placeholders that report
+    their full size and fetch the content when opened. A scan must not
+    start downloads, so such a file is refused.
+
+    :raises OSError: If the file is a placeholder or cannot be opened.
+    """
+    if getattr(os.stat(path), "st_flags", 0) & _SF_DATALESS:
+        raise OSError("not downloaded: the file is a cloud placeholder")
+    return open(path, "rb")
+
+
 class _HeaderError(Exception):
     """A header that cannot be parsed; its message becomes an issue."""
 
@@ -311,7 +329,7 @@ def read_gguf(path: str | os.PathLike[str], *, cap: int = HEADER_CAP) -> GGUFInf
     """
     info = GGUFInfo()
     try:
-        with open(path, "rb") as fh:
+        with open_local(path) as fh:
             size = os.fstat(fh.fileno()).st_size
             _parse_gguf(_Reader(fh, size, cap), info)
     except (OSError, _HeaderError) as exc:
@@ -398,7 +416,7 @@ def read_safetensors(
     """
     info = SafetensorsInfo()
     try:
-        with open(path, "rb") as fh:
+        with open_local(path) as fh:
             size = os.fstat(fh.fileno()).st_size
             prefix = fh.read(8)
             if len(prefix) < 8:
@@ -430,7 +448,7 @@ def sniff(path: str | os.PathLike[str]) -> str | None:
         including a file that cannot be opened.
     """
     try:
-        with open(path, "rb") as fh:
+        with open_local(path) as fh:
             size = os.fstat(fh.fileno()).st_size
             head = fh.read(9)
     except OSError:

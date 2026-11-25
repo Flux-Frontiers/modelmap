@@ -25,7 +25,7 @@ from __future__ import annotations
 import os
 
 from modelmap.headers import sniff
-from modelmap.providers.base import Context, Tally, files_under, listdir
+from modelmap.providers.base import Context, Tally, files_under, is_dir, listdir
 from modelmap.providers.describe import describe_directory, describe_gguf, guess_family
 from modelmap.records import ModelRecord, ScanRoot
 
@@ -76,10 +76,14 @@ def _current_snapshot(ctx: Context, repo: str) -> str | None:
         pass
     if not os.path.isdir(snapshots):
         return None
-    candidates = [e for e in listdir(ctx, snapshots) if e.is_dir()]
-    if not candidates:
-        return None
-    return max(candidates, key=lambda e: (e.stat().st_mtime, e.name)).path
+    dated = []
+    for entry in listdir(ctx, snapshots):
+        try:
+            if entry.is_dir():
+                dated.append((entry.stat().st_mtime, entry.name, entry.path))
+        except OSError:
+            continue
+    return max(dated)[2] if dated else None
 
 
 def _scan_repo(ctx: Context, repo: os.DirEntry[str], provider: str) -> ModelRecord | None:
@@ -181,7 +185,7 @@ def scan_hub(hub: str, ctx: Context, provider: str = NAME) -> list[ModelRecord]:
     records = []
     for entry in listdir(ctx, hub):
         prefix = entry.name.partition("--")[0]
-        if prefix in _KINDS and "--" in entry.name and entry.is_dir():
+        if prefix in _KINDS and "--" in entry.name and is_dir(entry):
             record = _scan_repo(ctx, entry, provider)
             if record:
                 records.append(record)

@@ -146,6 +146,34 @@ class Tally:
         )
 
 
+def is_file(entry: os.DirEntry[str]) -> bool:
+    """``entry.is_file()``, false when the entry cannot be examined."""
+    try:
+        return entry.is_file()
+    except OSError:
+        return False
+
+
+def is_dir(entry: os.DirEntry[str], *, follow_symlinks: bool = True) -> bool:
+    """``entry.is_dir()``, false when the entry cannot be examined."""
+    try:
+        return entry.is_dir(follow_symlinks=follow_symlinks)
+    except OSError:
+        return False
+
+
+def file_size(path: str) -> int | None:
+    """Size of a file, or None when it cannot be examined.
+
+    A directory that may be listed but not searched yields names whose
+    files cannot be stat'ed.
+    """
+    try:
+        return os.path.getsize(path)
+    except OSError:
+        return None
+
+
 def listdir(ctx: Context, path: str | os.PathLike[str]) -> list[os.DirEntry[str]]:
     """Entries of a directory in name order; a warning and nothing on error."""
     try:
@@ -168,7 +196,7 @@ def files_under(ctx: Context, path: str | os.PathLike[str]) -> list[str]:
         current = stack.pop()
         subdirs = []
         for entry in listdir(ctx, current):
-            if entry.is_dir(follow_symlinks=False):
+            if is_dir(entry, follow_symlinks=False):
                 if entry.name not in PRUNE:
                     subdirs.append(entry.path)
             elif not entry.is_symlink() or not os.path.isdir(entry.path):

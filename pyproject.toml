@@ -53,6 +53,9 @@ classifiers = [
 requires-python = ">=3.10"
 dependencies = []
 
+[project.scripts]
+modelmap = "modelmap.cli:main"
+
 # ---------------------------------------------------------------------------
 # Dev tooling (Poetry group, not a PEP 621 extra)
 # ---------------------------------------------------------------------------

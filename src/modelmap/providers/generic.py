@@ -18,10 +18,20 @@ Three shapes are recognized:
 from __future__ import annotations
 
 import os
-from collections.abc import Collection
+from collections.abc import Callable, Collection, Sequence
+from fnmatch import fnmatch
 
-from modelmap.headers import sniff
-from modelmap.providers.base import PRUNE, Context, Tally, files_under, listdir
+from modelmap.headers import open_local, sniff
+from modelmap.providers.base import (
+    PRUNE,
+    Context,
+    Tally,
+    file_size,
+    files_under,
+    is_dir,
+    is_file,
+    listdir,
+)
 from modelmap.providers.describe import (
     _OTHER_FORMATS,
     PICKLE_EXTENSIONS,
@@ -46,17 +56,17 @@ def _name(provider: str, root: str, path: str) -> str:
     A sweep finds many files called ``last`` or ``model``; the parent
     directory tells them apart without printing a whole path.
     """
-    if path == root:
-        return os.path.basename(path)
     if provider == NAME:
         return "/".join(path.split(os.sep)[-2:])
+    if path == root:
+        return os.path.basename(path)
     return os.path.relpath(path, root).replace(os.sep, "/")
 
 
 def _is_torch_file(path: str) -> bool:
     """True for a zip archive or a pickle stream, the two ``torch.save`` forms."""
     try:
-        with open(path, "rb") as fh:
+        with open_local(path) as fh:
             head = fh.read(4)
     except OSError:
         return False
@@ -93,35 +103,47 @@ def _scan_files(
     provider: str,
     root: str,
     directory: str,
-    files: list[os.DirEntry[str]],
+    files: list[str],
     min_size: int,
     sniff_all: bool,
 ) -> list[ModelRecord]:
     """Records for the loose model files directly inside one directory."""
     groups: dict[tuple[str, str], list[str]] = {}
     records = []
-    for entry in files:
-        ext = os.path.splitext(entry.name)[1].lower()
+    unreadable = 0
+    for path in files:
+        base_name = os.path.basename(path)
+        ext = os.path.splitext(base_name)[1].lower()
         kind = {".gguf": "gguf", ".safetensors": "safetensors"}.get(ext)
-        if kind is None and (ext in PICKLE_EXTENSIONS or ext in _OTHER_FORMATS):
-            if entry.stat().st_size >= min_size:
+        by_extension = ext in PICKLE_EXTENSIONS or ext in _OTHER_FORMATS
+        size = None
+        if kind is None and (by_extension or sniff_all):
+            size = file_size(path)
+            if size is None:
+                unreadable += 1
+                continue
+        if kind is None and by_extension:
+            if size is not None and size >= min_size:
                 # Inside a tool's own store the location vouches for the file;
                 # elsewhere a checkpoint must at least start like one.
                 unverified = (
-                    ext in PICKLE_EXTENSIONS and provider == NAME and not _is_torch_file(entry.path)
+                    ext in PICKLE_EXTENSIONS and provider == NAME and not _is_torch_file(path)
                 )
                 description = Description(
                     format=_OTHER_FORMATS.get(ext, "pytorch"),
                     issues=["unverified: identified by extension only"] if unverified else [],
                 )
-                name = _name(provider, root, os.path.splitext(entry.path)[0])
-                records.append(_record(ctx, provider, name, entry.path, [entry.path], description))
+                name = _name(provider, root, os.path.splitext(path)[0])
+                records.append(_record(ctx, provider, name, path, [path], description))
             continue
-        if kind is None and sniff_all and entry.stat().st_size >= _SNIFF_MIN_SIZE:
-            kind = sniff(entry.path)
+        if kind is None and sniff_all and size is not None and size >= _SNIFF_MIN_SIZE:
+            kind = sniff(path)
         if kind:
-            groups.setdefault((kind, shard_base(entry.name)), []).append(entry.path)
+            groups.setdefault((kind, shard_base(base_name)), []).append(path)
 
+    if unreadable:
+        # One warning for the directory, not one per file.
+        ctx.warn(directory, f"{unreadable} files could not be examined")
     for (kind, base), paths in sorted(groups.items()):
         name = _name(provider, root, os.path.join(directory, base))
         if kind == "gguf":
@@ -146,6 +168,9 @@ def scan_tree(
     min_size: int = MIN_UNVERIFIED_SIZE,
     config_marks_model: bool = False,
     sniff_all: bool = False,
+    excludes: Sequence[str] = (),
+    claim: Callable[[str, set[str]], list[ModelRecord] | None] | None = None,
+    root_may_be_model: bool = False,
 ) -> list[ModelRecord]:
     """Find every model under a directory.
 
@@ -162,20 +187,36 @@ def scan_tree(
         sweep, where ``config.json`` is everywhere.
     :param sniff_all: Open large files with unknown extensions to check for
         a GGUF or safetensors header.
+    :param excludes: Glob patterns; a file or directory whose name or full
+        path matches one is skipped.
+    :param claim: Called with each directory and the names in it. If it
+        returns records, the directory is some tool's store: the records
+        are kept and the walk does not enter it.
+    :param root_may_be_model: Let ``root`` itself be one model directory.
+        True for a path the user named; false for a store or a sweep.
     :return: Records in directory order.
     """
+
+    def excluded(entry: os.DirEntry[str]) -> bool:
+        return any(fnmatch(entry.name, p) or fnmatch(entry.path, p) for p in excludes)
+
     records: list[ModelRecord] = []
     stack = [(root, 0)]
     while stack:
         directory, depth = stack.pop()
-        entries = listdir(ctx, directory)
+        entries = [e for e in listdir(ctx, directory) if not excluded(e)]
         names = {e.name for e in entries}
-        files = [e for e in entries if e.is_file()]
-        has_safetensors = any(e.name.endswith(".safetensors") for e in files)
+        if claim:
+            found = claim(directory, names)
+            if found is not None:
+                records += found
+                continue
+        files = [e.path for e in entries if is_file(e)]
+        has_safetensors = any(f.endswith(".safetensors") for f in files)
         is_model_dir = "model_index.json" in names or (
             "config.json" in names and (has_safetensors or config_marks_model)
         )
-        if is_model_dir and directory != root:
+        if is_model_dir and (directory != root or root_may_be_model):
             contents = files_under(ctx, directory)
             present = [f for f in contents if os.path.exists(f)]
             description = describe_directory(directory, present)
@@ -189,7 +230,19 @@ def scan_tree(
         subdirs = [
             e.path
             for e in entries
-            if e.is_dir(follow_symlinks=False) and e.name not in PRUNE and e.path not in claimed
+            if is_dir(e, follow_symlinks=False) and e.name not in PRUNE and e.path not in claimed
         ]
         stack.extend((path, depth + 1) for path in reversed(subdirs))
     return records
+
+
+def scan_file(path: str, ctx: Context, *, min_size: int = 0) -> list[ModelRecord]:
+    """Describe one file the user named.
+
+    :param path: Resolved path of a file.
+    :param ctx: The scan context.
+    :param min_size: Floor for a file known only by its extension.
+    :return: One record, or none if the file is not a model.
+    """
+    directory = os.path.dirname(path)
+    return _scan_files(ctx, NAME, directory, directory, [path], min_size, sniff_all=True)

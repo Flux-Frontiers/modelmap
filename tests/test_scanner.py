@@ -412,3 +412,12 @@ def test_cloud_placeholder_is_never_opened(tmp_path: Path, monkeypatch: pytest.M
     # Still listed with its size, with the reason nothing more is known.
     assert found["generic:icloud/model"].size_bytes == model.stat().st_size
     assert "not downloaded" in found["generic:icloud/model"].issues[0]
+
+
+def test_a_context_can_be_scanned_twice(ctx: Context) -> None:
+    # `modelmap serve` rescans with the same context. Each scan starts with
+    # its own ledger, so the second does not find every file already charged.
+    first, second = scan(ctx), scan(ctx)
+    assert second.to_dict()["records"] == first.to_dict()["records"]
+    assert second.warnings == first.warnings
+    assert any(r.kind == "unattributed" for r in second.records)

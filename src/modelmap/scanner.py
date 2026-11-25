@@ -13,6 +13,7 @@ totals right, but every model would be listed a second time at size 0.
 
 from __future__ import annotations
 
+import dataclasses
 import os
 import socket
 import time
@@ -24,6 +25,7 @@ from modelmap.providers import PROVIDERS, hf, ollama
 from modelmap.providers.base import Context, finish
 from modelmap.providers.generic import MIN_UNVERIFIED_SIZE, scan_file, scan_tree
 from modelmap.records import ModelRecord, Scan, ScanRoot
+from modelmap.sizing import SizeLedger
 
 SWEEP_DEPTH = 5
 # Application data: full of files, and every store inside it is a provider root.
@@ -164,7 +166,10 @@ def scan(ctx: Context | None = None, options: Options | None = None) -> Scan:
     :return: Everything found. If the scan is interrupted, what was found
         so far, with a warning.
     """
-    ctx = ctx or Context.current()
+    # Each scan charges files, collects warnings and records uses afresh, so
+    # one context can be scanned again (`modelmap serve` rescans).
+    base = ctx or Context.current()
+    ctx = dataclasses.replace(base, ledger=SizeLedger(), warnings=[], uses={})
     options = options or Options()
     run = _Run(ctx, options)
     start = time.perf_counter()

@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.1] - 2026-11-26
 
+### Added
+
+- **A banner for light surroundings.** The Art Techno banner has a paper
+  version: the same drawing on a Silkscreen ground, with the name in iron
+  and the motif, frame and part line in deep gold and deep copper. The map
+  page shows it in a light theme and the obsidian original in a dark one,
+  with the icon to match; the README and the docs site switch the same way
+  with the viewer's light or dark mode. `scripts/build_logo.py` writes it.
+
 ### Fixed
 
 - **The map was taller than the window.** Its square was sized for the
@@ -22,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a gap under them.
 - The README screenshots are retaken with the banner, by
   `scripts/screenshots.py` from example data.
+- The map keeps at least 280 px in a very short window, where it could
+  shrink to nothing.
 
 ## [0.3.0] - 2026-11-26
 

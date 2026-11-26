@@ -499,9 +499,9 @@ input[type=search]{font:inherit;padding:6px 10px;border:1px solid var(--line);bo
 background:var(--surface);color:var(--text);min-width:0;width:14em}
 #crumbs{display:flex;flex-wrap:wrap;gap:4px;align-items:center;min-height:28px;margin-bottom:8px}
 #crumbs .sep{color:var(--text2)}
-.layout{display:grid;grid-template-columns:minmax(0,min(100%,calc(100vh - 265px))) minmax(0,1fr);
+.layout{display:grid;grid-template-columns:minmax(0,min(100%,calc(100vh - var(--map-top, 233px) - 32px))) minmax(0,1fr);
 gap:24px;align-items:start}
-@media (max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}.map{max-width:max(320px,calc(100vh - var(--map-top, 233px) - 32px))}}
 .map{position:relative;background:var(--surface);border-radius:6px}
 .map svg{display:block;width:100%;height:auto;aspect-ratio:1}
 .view{display:none}.view.on{display:inline}
@@ -650,6 +650,15 @@ _JS = """
     tip.style.left = Math.max(8, x) + "px";
     tip.style.top = Math.max(8, y) + "px";
   });
+  // The square fits the window below whatever is above it: the header
+  // wraps on a narrow window, so its height is measured, not assumed.
+  var map = document.querySelector(".map");
+  function fit() {
+    var top = map.getBoundingClientRect().top + window.scrollY;
+    document.documentElement.style.setProperty("--map-top", Math.round(top) + "px");
+  }
+  window.addEventListener("resize", fit);
+  fit();
   search.addEventListener("input", filter);
   window.addEventListener("hashchange", function () { show(location.hash.slice(1)); });
   show(location.hash.slice(1));

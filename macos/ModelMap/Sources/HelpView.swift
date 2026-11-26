@@ -132,7 +132,8 @@ private struct Shortcut: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             Text(item).fontWeight(.medium).frame(width: 170, alignment: .leading)
-            Text(keys).font(.system(.callout, design: .monospaced)).frame(width: 96, alignment: .leading)
+            // An empty Text has no baseline and leaves a gap under the row.
+            Text(keys.isEmpty ? " " : keys).font(.system(.callout, design: .monospaced)).frame(width: 96, alignment: .leading)
             Text(does).foregroundStyle(.secondary)
         }
     }

@@ -11,8 +11,8 @@
 #
 # Usage: scripts/make_dmg.sh   (from macos/; `make dmg` runs it after `make build`)
 #
-# NOTARY_PROFILE  notarytool keychain profile (default knowledgepress-notary,
-#                 stored for the same team with `xcrun notarytool
+# NOTARY_PROFILE  notarytool keychain profile (default modelmap-notary, an
+#                 App Store Connect API key stored with `xcrun notarytool
 #                 store-credentials`)
 # NOTARIZE=0      sign and package only, for a local check
 
@@ -21,7 +21,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$HERE"
 VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' ../pyproject.toml)"
-PROFILE="${NOTARY_PROFILE:-knowledgepress-notary}"
+PROFILE="${NOTARY_PROFILE:-modelmap-notary}"
 NOTARIZE="${NOTARIZE:-1}"
 BUILT="build/Build/Products/Release/modelmap.app"
 OUT="build/dmg"
@@ -74,12 +74,14 @@ while IFS= read -r -d '' file; do
   fi
 done < <(find "$APP/Contents/Resources/Python" -type f -print0)
 sign --entitlements ModelMap/ModelMap.entitlements "$APP"
-codesign --verify --strict --deep "$APP"
 echo "Signed $count Python binaries and the app as: $IDENTITY"
 
 # The signed interpreter must still run modelmap under the hardened runtime.
-"$APP/Contents/Resources/Python/bin/python3" -I -c 'import modelmap.serve' \
+# -B: writing bytecode into the bundle would break the seal just made.
+"$APP/Contents/Resources/Python/bin/python3" -I -B -c 'import modelmap.serve' \
   || { echo "error: the signed Python cannot import modelmap" >&2; exit 1; }
+# Verify after the check, so anything it changed is caught here, not by Apple.
+codesign --verify --strict --deep "$APP"
 
 if [ "$NOTARIZE" = 1 ]; then
   ditto -c -k --keepParent "$APP" "$OUT/modelmap.zip"

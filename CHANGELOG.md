@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The map was taller than the window.** Its square was sized for the
+  page before the banner, so its bottom sat below the window's edge in
+  `serve`, the Mac app and the written page. It now fits under the
+  banner. The README screenshots are retaken with the banner, by
+  `scripts/screenshots.py` from example data.
+
 ## [0.3.0] - 2026-11-26
 
 ### Added

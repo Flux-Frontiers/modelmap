@@ -7,12 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-26
+
 ### Fixed
 
 - **The map was taller than the window.** Its square was sized for the
   page before the banner, so its bottom sat below the window's edge in
-  `serve`, the Mac app and the written page. It now fits under the
-  banner. The README screenshots are retaken with the banner, by
+  `serve`, the Mac app and the written page. The page now measures where
+  the map starts, so the square fits the window at any width, including
+  when the header wraps; in the one-column layout of a narrow window it is
+  no taller than the window either, down to 320 px. Checked at five
+  window sizes from 1440 x 900 to 400 x 800.
+- **Help in the Mac app.** Rows of the Menus table without a shortcut left
+  a gap under them.
+- The README screenshots are retaken with the banner, by
   `scripts/screenshots.py` from example data.
 
 ## [0.3.0] - 2026-11-26

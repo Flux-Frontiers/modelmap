@@ -23,7 +23,7 @@ struct HelpView: View {
                     Text("The **Scan** menu at the bottom of the panel says what to scan with them:")
                     Bullet("**These folders, the model stores and the home folder**: the default scan plus your folders.")
                     Bullet("**These folders and the model stores**: without the sweep of your home folder.")
-                    Bullet("**Only these folders**: nothing else.")
+                    Bullet("**Only these folders**: nothing else. The panel starts here.")
                     Text("The window's title shows what is scanned, and the choice is remembered. **Map > Scan Usual Locations** goes back to the default.")
                         .foregroundStyle(.secondary)
                 }

@@ -23,8 +23,9 @@ enum FolderPicker {
             "These folders and the model stores (Hugging Face, Ollama, oMLX ...)",
             "These folders, the model stores and the home folder",
         ])
-        // From the usual scan, the likely wish is to add a drive to it.
-        extent.selectItem(at: current.folders.isEmpty || current.sweepHome ? 2 : current.includeStores ? 1 : 0)
+        // Choosing folders means scanning those folders: start on the
+        // narrowest choice, or on the one made last time.
+        extent.selectItem(at: current.folders.isEmpty || !current.includeStores ? 0 : current.sweepHome ? 2 : 1)
         let label = NSTextField(labelWithString: "Scan:")
         let row = NSStackView(views: [label, extent])
         row.orientation = .horizontal

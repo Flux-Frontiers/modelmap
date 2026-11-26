@@ -47,11 +47,11 @@ more folders. The **Scan** menu at the bottom of the panel says what to
 scan with them:
 
 - **These folders, the model stores and the home folder**: everything the
-  default scan covers, plus your folders. This is the choice the panel
-  starts on.
+  default scan covers, plus your folders.
 - **These folders and the model stores**: the stores and your folders,
   without the sweep of your home folder.
-- **Only these folders**: nothing else.
+- **Only these folders**: nothing else. This is the choice the panel
+  starts on, until you make another.
 
 The window's title shows what is being scanned, and the app remembers the
 choice the next time it opens. Map > Scan Usual Locations goes back to

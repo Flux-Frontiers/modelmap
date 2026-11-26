@@ -5,7 +5,7 @@
 [![CI](https://github.com/Flux-Frontiers/modelmap/actions/workflows/ci.yml/badge.svg)](https://github.com/Flux-Frontiers/modelmap/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://www.python.org/)
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://github.com/Flux-Frontiers/modelmap/blob/main/LICENSE)
-[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](https://github.com/Flux-Frontiers/modelmap/releases)
+[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](https://github.com/Flux-Frontiers/modelmap/releases)
 [![Poetry](https://img.shields.io/endpoint?url=https://python-poetry.org/badge/v0.json)](https://python-poetry.org/)
 [![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.24520428-blue.svg)](https://doi.org/10.5281/zenodo.24520428)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://pre-commit.com/)
@@ -110,13 +110,13 @@ poetry run mkdocs serve        # the docs site at http://127.0.0.1:8000
 
 If you use modelmap in your research or project, please cite it:
 
-> Suchanek, E. G. (2026). *modelmap: Find, Map and Remove Local LLM Models* (Version 0.2.0) [Software]. Flux-Frontiers. https://doi.org/10.5281/zenodo.24520428
+> Suchanek, E. G. (2026). *modelmap: Find, Map and Remove Local LLM Models* (Version 0.3.0) [Software]. Flux-Frontiers. https://doi.org/10.5281/zenodo.24520428
 
 ```bibtex
 @software{suchanek_modelmap,
   author    = {Suchanek, Eric G.},
   title     = {{modelmap}: Find, Map and Remove Local LLM Models},
-  version   = {0.2.0},
+  version   = {0.3.0},
   year      = {2026},
   publisher = {Flux-Frontiers},
   url       = {https://github.com/Flux-Frontiers/modelmap},

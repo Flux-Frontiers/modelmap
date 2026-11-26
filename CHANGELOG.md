@@ -7,13 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-26
+
 ### Added
 
-- **Mac app.** `macos/` builds `modelmap.app`: a window around
-  `modelmap serve`, run from a Python bundled in the app, with a Map menu
-  (choose folders or drives to scan, rescan, open in a browser, restart),
-  a server log, and help. It reads the login shell's environment, so
-  settings that move a store apply. Built locally with `make run`.
+- **Mac app.** `modelmap.app` is a window around `modelmap serve`, run
+  from a Python bundled in the app, with a Map menu (choose folders or
+  drives to scan, rescan, open in a browser, restart), a server log, and
+  help. It reads the login shell's environment, so settings that move a
+  store apply. It needs macOS 15 on Apple silicon, where `/usr/bin/trash`
+  exists. The GitHub Release carries `modelmap-0.3.0.dmg`, signed with a
+  Developer ID and notarized; `macos/` builds it with `make dmg`, or the
+  app alone with `make run`.
 - **`--sweep`.** Keeps the sweep of the home folder when paths or
   `--only` are given, which otherwise turn it off. Not with
   `--no-defaults`.
@@ -28,8 +33,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   not proof that the running Ollama owns the scanned store. Each tag's ID
   from `ollama list` must now match the sha256 of the scanned manifest,
   and an `OLLAMA_HOST` that names another machine is refused.
-- **Mac app on macOS 14.** `/usr/bin/trash` first appeared in macOS 15, so
-  every Trash removal was refused on 14. The app now requires macOS 15.
 
 ## [0.2.0] - 2026-11-25
 

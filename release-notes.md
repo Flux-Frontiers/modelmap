@@ -1,48 +1,41 @@
-# Release Notes: v0.2.0
+# Release Notes: v0.3.0
 
-> Released: 2026-11-25
+> Released: 2026-11-26
 
-modelmap can now remove models from the map itself. `modelmap serve`
-scans, serves the map from your own machine, and gives each model a
-Remove button that does exactly what `modelmap rm` does: it shows every
-command or file that would go, waits for you to confirm, and checks
-again before acting.
+modelmap now comes as a Mac app. `modelmap-0.3.0.dmg`, attached to this
+release, holds a signed and notarized `modelmap.app`: the map in its own
+window, with the same Remove buttons as `modelmap serve`, and a Python
+inside it so the Mac needs nothing else installed. This release also makes
+Ollama removals safer.
 
 ## What changed
 
-**The map as a local app.** `modelmap serve` opens the same map in your
-browser, served from `127.0.0.1`, with a Rescan button and a Remove
-button on each model. The Remove dialog lists the command or every path,
-any Ollama tags that go with the model, and whether the removal can be
-undone from the Trash. When you confirm, the server scans and plans
-again; if anything has changed since the dialog opened, it removes
-nothing and shows the new list. After a removal the map is redrawn from
-a fresh scan.
+**The Mac app.** Open the disk image and drag modelmap to Applications. The
+app scans, shows the map, and removes models through the same code the
+command line runs. Its Map menu rescans, opens the page in a browser, and
+chooses folders or drives to scan, with or without the usual model stores
+and the home folder. A server log shows every removal and the command it
+ran, and Help explains each part. The app reads your login shell's
+settings, so stores moved by `HF_HOME` or `OLLAMA_MODELS` are found. It
+needs macOS 15 or later on Apple silicon.
 
-**Built to be safe on a shared browser.** The server listens only on
-this machine, answers only to its own page, and needs a token made for
-each run, which it never writes into the page or the log. A page on
-another site cannot read the map or ask it to remove anything. Serving an
-inventory from another machine, or adding `--read-only`, turns removal
-off.
+**Safer Ollama removal.** Two gaps are closed. A removal used to count as
+done when Ollama could not be asked afterward; it now counts only when
+Ollama answers without the tags and the scanned store no longer holds
+them. And matching tag names was not proof that the running Ollama owns
+the store that was scanned: each tag's ID must now match the scanned
+manifest, and an `OLLAMA_HOST` that names another machine is refused. In
+either case nothing is removed, and the dialog says why.
 
-**A face and a home.** modelmap has its own Art Techno logo, a treemap
-drawn as a chip floorplan, and every page opens with a banner showing the
-version and a link to Flux-Frontiers. The documentation is now a site at
-https://flux-frontiers.github.io/modelmap/, with the guide, the command
-reference, the cheat sheet and an API reference.
-
-**A fix for repeated scans.** A second scan in the same process
-undercounted, because the first scan's bookkeeping carried over. The
-command line scans once, so earlier results were right; the server
-rescans, and now each scan starts fresh.
+**`--sweep`.** Naming a folder or a store turns off the sweep of the home
+folder. `--sweep` keeps it, so `modelmap map --sweep /Volumes/Drive` maps
+an external drive together with everything the default scan finds.
 
 ## Upgrading
 
-Install or upgrade from PyPI with `pipx install modelmap` (or
-`pip install -U modelmap`). Nothing needs migrating; inventories made by
-0.1.0 still load. Try `modelmap serve`, or `modelmap serve --read-only`
-to look without the Remove buttons.
+Upgrade the command with `pipx upgrade modelmap` or `pip install -U
+modelmap`; nothing needs migrating. For the app, download the disk image
+from this release.
 
 ---
 

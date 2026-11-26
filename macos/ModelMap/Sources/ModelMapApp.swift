@@ -15,6 +15,15 @@ struct ModelMapApp: App {
         .commands {
             CommandGroup(replacing: .newItem) {}
             CommandMenu("Map") {
+                Button("Choose Folders to Scan...") {
+                    if let scope = FolderPicker.choose(current: delegate.server.scope) {
+                        delegate.server.scan(scope)
+                    }
+                }
+                .keyboardShortcut("o")
+                Button("Scan Usual Locations") { delegate.server.scan(.usual) }
+                    .disabled(delegate.server.scope == .usual)
+                Divider()
                 Button("Rescan") { page.rescan() }
                     .keyboardShortcut("r")
                     .disabled(!delegate.server.isRunning)

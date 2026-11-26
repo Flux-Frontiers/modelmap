@@ -5,14 +5,21 @@ struct ContentView: View {
     let page: PageStore
 
     var body: some View {
+        content.navigationSubtitle(server.scope.summary)
+    }
+
+    @ViewBuilder private var content: some View {
         switch server.state {
         case .stopped, .starting:
             VStack(spacing: 14) {
                 ProgressView()
                 Text("Scanning for models...")
                     .font(.headline)
-                Text("modelmap looks in every store it knows and sweeps your home folder.")
+                Text(server.scope.folders.isEmpty
+                     ? "modelmap looks in every store it knows and sweeps your home folder."
+                     : "Scanning: \(server.scope.summary)")
                     .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         case let .running(url):

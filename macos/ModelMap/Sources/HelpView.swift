@@ -18,6 +18,13 @@ struct HelpView: View {
                     Bullet("Group by store, format, family or kind, and filter by name, with the controls above the map.")
                     Bullet("The panel lists every entry with a problem, such as an incomplete download, even when its tile is too small to see.")
                 }
+                HelpSection(title: "Choosing what to scan") {
+                    Text("By default the app reads every model store it knows and sweeps your home folder. To scan an external drive or another folder, choose **Map > Choose Folders to Scan** (Cmd-O).")
+                    Bullet("**Also read the usual model stores** checked: the stores and the folders you chose.")
+                    Bullet("Unchecked: only the folders you chose.")
+                    Text("Choosing folders turns off the sweep of your home folder. The window's title shows what is scanned, and the choice is remembered. **Map > Scan Usual Locations** goes back to the default.")
+                        .foregroundStyle(.secondary)
+                }
                 HelpSection(title: "Removing a model") {
                     Text("Open the model and press **Remove** in its panel. The dialog lists exactly what will happen:")
                     Bullet("An Ollama model: the `ollama rm` command, with every tag that shares its weights.")
@@ -29,6 +36,8 @@ struct HelpView: View {
                         .foregroundStyle(.secondary)
                 }
                 HelpSection(title: "Menus") {
+                    Shortcut("Choose Folders to Scan", "Cmd-O", "Scan folders or drives you pick.")
+                    Shortcut("Scan Usual Locations", "", "Back to the stores and the home folder.")
                     Shortcut("Rescan", "Cmd-R", "Scan again and redraw the map.")
                     Shortcut("Reload Page", "Shift-Cmd-R", "Redraw the page without scanning.")
                     Shortcut("Open in Browser", "Cmd-B", "Open the same page in your web browser.")
@@ -120,7 +129,7 @@ private struct Shortcut: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text(item).fontWeight(.medium).frame(width: 130, alignment: .leading)
+            Text(item).fontWeight(.medium).frame(width: 170, alignment: .leading)
             Text(keys).font(.system(.callout, design: .monospaced)).frame(width: 96, alignment: .leading)
             Text(does).foregroundStyle(.secondary)
         }

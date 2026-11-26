@@ -19,6 +19,8 @@ final class ServerController {
     private(set) var state: State = .stopped
     /// Everything the server printed: its address, each request, each removal.
     private(set) var log = ""
+    /// What the server scans; changing it restarts the server.
+    private(set) var scope = ScanScope.load()
 
     private var process: Process?
     private var pending = ""
@@ -52,6 +54,14 @@ final class ServerController {
         start()
     }
 
+    /// Scan something else: remembered for the next launch, and the server
+    /// restarts to scan it.
+    func scan(_ scope: ScanScope) {
+        self.scope = scope
+        scope.save()
+        restart()
+    }
+
     private func launch(_ base: [String: String]) {
         guard let python = Self.python, FileManager.default.isExecutableFile(atPath: python.path) else {
             state = .failed("The Python inside the app is missing. Build it with `make python` in macos/.")
@@ -63,7 +73,7 @@ final class ServerController {
         process.executableURL = python
         // -I: ignore PYTHONPATH and the user's site-packages; only the
         // modelmap inside the app is imported.
-        process.arguments = ["-I", "-m", "modelmap", "serve", "--no-open"]
+        process.arguments = ["-I", "-m", "modelmap", "serve", "--no-open"] + scope.arguments
         process.environment = env
         process.currentDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
         let pipe = Pipe()

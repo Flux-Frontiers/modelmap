@@ -61,3 +61,36 @@ struct NavigationTests {
         #expect(!MapView.Coordinator.isServer(home, server))
     }
 }
+
+struct ScanScopeTests {
+    @Test func theUsualScopeAddsNoArguments() {
+        #expect(ScanScope.usual.arguments.isEmpty)
+        #expect(ScanScope.usual.summary == "Usual locations")
+    }
+
+    @Test func foldersAreAddedToTheStores() {
+        let scope = ScanScope(folders: ["/Volumes/Models", "/tmp/x"], includeStores: true)
+        #expect(scope.arguments == ["/Volumes/Models", "/tmp/x"])
+        #expect(scope.summary.hasPrefix("Model stores and /Volumes/Models"))
+    }
+
+    @Test func foldersAloneSkipTheStores() {
+        let scope = ScanScope(folders: ["/Volumes/Models"], includeStores: false)
+        #expect(scope.arguments == ["--no-defaults", "/Volumes/Models"])
+        #expect(scope.summary == "/Volumes/Models")
+    }
+
+    @Test func aRememberedScopeSurvivesARelaunch() throws {
+        let defaults = try #require(UserDefaults(suiteName: "modelmap-tests-\(UUID().uuidString)"))
+        let folder = FileManager.default.temporaryDirectory.path
+        ScanScope(folders: [folder], includeStores: false).save(to: defaults)
+        #expect(ScanScope.load(from: defaults) == ScanScope(folders: [folder], includeStores: false))
+    }
+
+    @Test func aFolderThatIsGoneIsDropped() throws {
+        let defaults = try #require(UserDefaults(suiteName: "modelmap-tests-\(UUID().uuidString)"))
+        ScanScope(folders: ["/no/such/folder"], includeStores: false).save(to: defaults)
+        // Nothing left to scan, so the usual places again, never --no-defaults alone.
+        #expect(ScanScope.load(from: defaults) == .usual)
+    }
+}

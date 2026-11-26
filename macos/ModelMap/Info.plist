@@ -37,5 +37,9 @@
 	<string>modelmap looks for downloaded model files in Downloads so it can show how much space they take.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright 2026 Eric G. Suchanek, PhD. BSD-3-Clause.</string>
+	<key>NSNetworkVolumesUsageDescription</key>
+	<string>modelmap scans the network drives you choose for model files.</string>
+	<key>NSRemovableVolumesUsageDescription</key>
+	<string>modelmap scans the drives you choose for model files.</string>
 </dict>
 </plist>

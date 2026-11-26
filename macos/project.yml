@@ -46,6 +46,8 @@ targets:
         NSDesktopFolderUsageDescription: modelmap looks for model files on your Desktop so it can show how much space they take.
         NSDocumentsFolderUsageDescription: modelmap looks for model files in Documents so it can show how much space they take.
         NSDownloadsFolderUsageDescription: modelmap looks for downloaded model files in Downloads so it can show how much space they take.
+        NSRemovableVolumesUsageDescription: modelmap scans the drives you choose for model files.
+        NSNetworkVolumesUsageDescription: modelmap scans the network drives you choose for model files.
         # The page is served over plain HTTP on 127.0.0.1.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true

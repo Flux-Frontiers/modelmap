@@ -32,6 +32,9 @@ run on this Mac only.
   `OLLAMA_MODELS` that move a store.
 - The window shows only the server's own page. Other links open in your
   browser.
+- Map > Choose Folders to Scan (Cmd-O) scans folders or drives you pick,
+  with or without the usual stores; the choice is remembered, and Map >
+  Scan Usual Locations goes back.
 - Map > Rescan (Cmd-R) scans again; Map > Open in Browser (Cmd-B) opens the
   same page in your browser; Window > Server Log (Cmd-L) shows every
   request and every removal with what it ran, with the token hidden.

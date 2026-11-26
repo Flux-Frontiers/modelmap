@@ -38,6 +38,22 @@ shows the map:
 - The panel lists every entry with a problem, such as an incomplete
   download, even when its tile is too small to see.
 
+## Choosing what to scan
+
+By default the app reads every model store it knows and sweeps your home
+folder. To scan somewhere else, such as an external drive or a folder of
+downloads, choose Map > Choose Folders to Scan (Cmd-O) and pick one or
+more folders.
+
+- With **Also read the usual model stores** checked, the app reads the
+  stores and the folders you chose.
+- Unchecked, it scans only the folders you chose.
+
+Either way, choosing folders turns off the sweep of your home folder, as
+naming a folder does on the command line. The window's title shows what
+is being scanned, and the app remembers the choice the next time it
+opens. Map > Scan Usual Locations goes back to the default.
+
 ## Removing a model
 
 Open the model and press **Remove** in its panel. A dialog lists exactly
@@ -67,6 +83,8 @@ explains each rule.
 
 | Menu item | Shortcut | Does |
 |-----------|----------|------|
+| Map > Choose Folders to Scan | Cmd-O | Scan folders or drives you pick |
+| Map > Scan Usual Locations | | Go back to the stores and the home folder |
 | Map > Rescan | Cmd-R | Scan again and redraw the map |
 | Map > Reload Page | Shift-Cmd-R | Redraw the page without scanning |
 | Map > Open in Browser | Cmd-B | Open the same page in your web browser |

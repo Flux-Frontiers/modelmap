@@ -15,6 +15,7 @@ Needs Xcode, [XcodeGen](https://github.com/yonaskolb/XcodeGen)
 cd macos
 make run      # stage Python, generate the project, build, and open the app
 make test     # the Swift unit tests
+make dmg      # a Developer ID signed, notarized modelmap-<version>.dmg in build/dmg
 make clean
 ```
 

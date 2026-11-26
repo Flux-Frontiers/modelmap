@@ -8,7 +8,15 @@ needs to be installed.
 
 ## Get the app
 
-The app is built from a clone of the repository. It needs Xcode,
+Download `modelmap-<version>.dmg` from the
+[latest release](https://github.com/Flux-Frontiers/modelmap/releases/latest),
+open it, and drag modelmap to Applications. The app is signed with a
+Developer ID and notarized by Apple, so it opens without a warning. It needs
+macOS 15 or later on Apple silicon.
+
+### Build it yourself
+
+Building from a clone needs Xcode,
 [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`),
 uv and Poetry.
 
@@ -19,9 +27,10 @@ make run
 ```
 
 `make run` builds `macos/build/Build/Products/Release/modelmap.app` and
-opens it. Drag it to Applications to keep it. The build is for Apple
-silicon, needs macOS 15 or later, and is signed to run on the Mac that
-built it.
+opens it, signed to run on the Mac that built it. `make dmg` builds the
+signed and notarized disk image instead; it needs a Developer ID
+Application certificate in the keychain and a `notarytool` keychain
+profile (`NOTARY_PROFILE`).
 
 ## Using it
 

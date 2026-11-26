@@ -3,6 +3,7 @@
 #
 #   make run      stage Python, build, and open the app
 #   make test     the Swift unit tests
+#   make dmg      a Developer ID signed, notarized modelmap-<version>.dmg in build/dmg
 #   make clean    remove everything these targets write
 
 # pipefail, so a test run piped through rg still fails the target.
@@ -16,7 +17,7 @@ XCODE   := xcodebuild -project ModelMap.xcodeproj -scheme ModelMap -derivedDataP
            -destination 'platform=macOS,arch=arm64' \
            MARKETING_VERSION=$(VERSION) CURRENT_PROJECT_VERSION=$(BUILD)
 
-.PHONY: python project build run test clean
+.PHONY: python project build run test dmg clean
 
 python:
 	scripts/stage_python.sh
@@ -34,6 +35,9 @@ run: build
 test: python project
 	$(XCODE) -configuration Debug test 2>&1 | rg 'Test run with|TEST (SUCCEEDED|FAILED)|error:|failed'
 
+
+dmg: build
+	scripts/make_dmg.sh
 
 clean:
 	rm -rf build Python ModelMap.xcodeproj

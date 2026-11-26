@@ -63,14 +63,18 @@ from a Python bundled inside the app, so the Mac needs nothing else
 installed, and it reads your login shell's settings, so stores moved by
 `HF_HOME` or `OLLAMA_MODELS` are found.
 
-For now it is built from a clone (Xcode, XcodeGen, uv and Poetry):
+Download `modelmap-<version>.dmg` from the
+[latest release](https://github.com/Flux-Frontiers/modelmap/releases/latest),
+open it, and drag modelmap to Applications. It is signed with a Developer ID
+and notarized by Apple, and needs macOS 15 or later on Apple silicon.
+
+To build it from a clone instead (Xcode, XcodeGen, uv and Poetry):
 
 ```bash
 cd macos && make run
 ```
 
-It needs macOS 15 or later on Apple silicon. See the
-[Mac app page](https://flux-frontiers.github.io/modelmap/mac/) for what it
+See the [Mac app page](https://flux-frontiers.github.io/modelmap/mac/) for what it
 does and how to use it.
 
 ## Other machines

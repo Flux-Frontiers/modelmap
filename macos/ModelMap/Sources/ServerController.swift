@@ -69,6 +69,8 @@ final class ServerController {
         }
         var env = base
         env["PYTHONUNBUFFERED"] = "1"
+        // The bundle is signed: nothing may be written into it.
+        env["PYTHONDONTWRITEBYTECODE"] = "1"
         let process = Process()
         process.executableURL = python
         // -I: ignore PYTHONPATH and the user's site-packages; only the

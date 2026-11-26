@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Mac app.** `macos/` builds `modelmap.app`: a window around
+  `modelmap serve`, run from a Python bundled in the app, with a Map menu
+  (choose folders or drives to scan, rescan, open in a browser, restart),
+  a server log, and help. It reads the login shell's environment, so
+  settings that move a store apply. Built locally with `make run`.
+- **`--sweep`.** Keeps the sweep of the home folder when paths or
+  `--only` are given, which otherwise turn it off. Not with
+  `--no-defaults`.
+
 ## [0.2.0] - 2026-11-25
 
 ### Added

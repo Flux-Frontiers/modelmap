@@ -80,6 +80,26 @@ struct ScanScopeTests {
         #expect(scope.summary == "/Volumes/Models")
     }
 
+    @Test func theHomeSweepCanBeKept() {
+        let scope = ScanScope(folders: ["/Volumes/Models"], includeStores: true, sweepHome: true)
+        #expect(scope.arguments == ["--sweep", "/Volumes/Models"])
+        #expect(scope.summary == "Model stores, home folder and /Volumes/Models")
+    }
+
+    @Test func theSweepNeedsTheStores() {
+        // modelmap refuses --sweep with --no-defaults; folders alone never sweep.
+        let scope = ScanScope(folders: ["/Volumes/Models"], includeStores: false, sweepHome: true)
+        #expect(scope.arguments == ["--no-defaults", "/Volumes/Models"])
+    }
+
+    @Test func aRememberedSweepSurvivesARelaunch() throws {
+        let defaults = try #require(UserDefaults(suiteName: "modelmap-tests-\(UUID().uuidString)"))
+        let folder = FileManager.default.temporaryDirectory.path
+        let scope = ScanScope(folders: [folder], includeStores: true, sweepHome: true)
+        scope.save(to: defaults)
+        #expect(ScanScope.load(from: defaults) == scope)
+    }
+
     @Test func aRememberedScopeSurvivesARelaunch() throws {
         let defaults = try #require(UserDefaults(suiteName: "modelmap-tests-\(UUID().uuidString)"))
         let folder = FileManager.default.temporaryDirectory.path

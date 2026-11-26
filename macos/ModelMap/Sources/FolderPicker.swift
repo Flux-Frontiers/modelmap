@@ -16,19 +16,26 @@ enum FolderPicker {
         panel.allowsMultipleSelection = true
         panel.canCreateDirectories = false
 
-        let stores = NSButton(
-            checkboxWithTitle: "Also read the usual model stores (Hugging Face, Ollama, oMLX ...)",
-            target: nil,
-            action: nil
-        )
-        stores.state = current.includeStores ? .on : .off
-        let accessory = NSView(frame: NSRect(x: 0, y: 0, width: 460, height: 36))
-        stores.frame = NSRect(x: 16, y: 8, width: 440, height: 20)
-        accessory.addSubview(stores)
-        panel.accessoryView = accessory
+        // What to scan with the chosen folders, from least to most.
+        let extent = NSPopUpButton(frame: .zero, pullsDown: false)
+        extent.addItems(withTitles: [
+            "Only these folders",
+            "These folders and the model stores (Hugging Face, Ollama, oMLX ...)",
+            "These folders, the model stores and the home folder",
+        ])
+        // From the usual scan, the likely wish is to add a drive to it.
+        extent.selectItem(at: current.folders.isEmpty || current.sweepHome ? 2 : current.includeStores ? 1 : 0)
+        let label = NSTextField(labelWithString: "Scan:")
+        let row = NSStackView(views: [label, extent])
+        row.orientation = .horizontal
+        row.spacing = 8
+        row.edgeInsets = NSEdgeInsets(top: 8, left: 16, bottom: 8, right: 16)
+        row.frame = NSRect(x: 0, y: 0, width: 560, height: 40)
+        panel.accessoryView = row
         panel.isAccessoryViewDisclosed = true
 
         guard panel.runModal() == .OK, !panel.urls.isEmpty else { return nil }
-        return ScanScope(folders: panel.urls.map(\.path), includeStores: stores.state == .on)
+        let choice = extent.indexOfSelectedItem
+        return ScanScope(folders: panel.urls.map(\.path), includeStores: choice >= 1, sweepHome: choice == 2)
     }
 }

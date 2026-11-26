@@ -22,6 +22,7 @@ modelmap --version
 | `--only NAMES` | Scan only these stores, comma-separated: `hf`, `ollama`, `omlx`, `lmstudio`, `llamacpp`, `gpt4all`, `jan`, `whisper`. Turns off the home sweep |
 | `--no-defaults` | Scan only the given paths, not the stores. Needs at least one `PATH` |
 | `--no-sweep` | Skip the sweep of the home folder |
+| `--sweep` | Sweep the home folder too, even when a `PATH` or `--only` is given. Not with `--no-defaults` |
 | `--exclude GLOB` | Skip files and folders whose name or path matches. Repeat for several patterns |
 | `--min-size SIZE` | Smallest checkpoint (`.pt`, `.bin` and similar) to list when only its extension says it is a model. Default `50MB`. Accepts `1.5GB`, `4GiB` or a byte count |
 | `--max-depth N` | Levels to descend below each given path |

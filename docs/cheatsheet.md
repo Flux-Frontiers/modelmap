@@ -9,6 +9,7 @@
 | List by format, or include datasets and caches | `modelmap list --group format`, `modelmap list --all` |
 | Scan an external drive too | `modelmap map /Volumes/Drive --open` |
 | Scan only one drive | `modelmap list --no-defaults /Volumes/Drive` |
+| Scan a drive and still sweep the home folder | `modelmap map --sweep /Volumes/Drive --open` |
 | Scan only Ollama and Hugging Face | `modelmap list --only ollama,hf` |
 | Find out why a store was not found | `modelmap providers` |
 | Size the map by space on disk | `modelmap map --disk --open` |

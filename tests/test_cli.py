@@ -14,7 +14,7 @@ from modelmap import __version__
 from modelmap.cli import main
 from modelmap.providers.base import Context
 from modelmap.records import ModelRecord, Scan
-from tests.fakemachine import FakeMachine
+from tests.fakemachine import GGML_F16, FakeMachine, write_gguf
 
 
 def run(ctx: Context, *argv: str) -> tuple[int, str]:
@@ -319,3 +319,28 @@ def test_inventory_is_read_as_it_is(
         main([command, "--from-json", str(inventory), *extra], ctx=ctx)
     assert raised.value.code == 2
     assert "reads an inventory as it is" in capsys.readouterr().err
+
+
+def test_sweep_keeps_the_home_sweep_when_paths_are_named(
+    machine: FakeMachine, ctx: Context, tmp_path: Path
+) -> None:
+    drive = tmp_path / "drive"
+    write_gguf(
+        drive / "external.gguf",
+        tensors=(("w", (1000, 1000), GGML_F16),),
+        metadata={"general.architecture": "llama", "general.file_type": 1},
+    )
+    _, without = run(ctx, "list", "--all", str(drive))
+    _, with_sweep = run(ctx, "list", "--all", "--sweep", str(drive))
+    assert "external" in without and "external" in with_sweep
+    assert "models/loose" not in without  # naming a path turns the sweep off
+    assert "models/loose" in with_sweep
+
+
+@pytest.mark.parametrize(
+    "argv", [["list", "--sweep", "--no-sweep"], ["list", "--sweep", "--no-defaults", "/tmp"]]
+)
+def test_sweep_usage_errors(ctx: Context, argv: list[str]) -> None:
+    with pytest.raises(SystemExit) as exc:
+        main(argv, ctx=ctx)
+    assert exc.value.code == 2

@@ -43,16 +43,19 @@ shows the map:
 By default the app reads every model store it knows and sweeps your home
 folder. To scan somewhere else, such as an external drive or a folder of
 downloads, choose Map > Choose Folders to Scan (Cmd-O) and pick one or
-more folders.
+more folders. The **Scan** menu at the bottom of the panel says what to
+scan with them:
 
-- With **Also read the usual model stores** checked, the app reads the
-  stores and the folders you chose.
-- Unchecked, it scans only the folders you chose.
+- **These folders, the model stores and the home folder**: everything the
+  default scan covers, plus your folders. This is the choice the panel
+  starts on.
+- **These folders and the model stores**: the stores and your folders,
+  without the sweep of your home folder.
+- **Only these folders**: nothing else.
 
-Either way, choosing folders turns off the sweep of your home folder, as
-naming a folder does on the command line. The window's title shows what
-is being scanned, and the app remembers the choice the next time it
-opens. Map > Scan Usual Locations goes back to the default.
+The window's title shows what is being scanned, and the app remembers the
+choice the next time it opens. Map > Scan Usual Locations goes back to
+the default.
 
 ## Removing a model
 
@@ -83,7 +86,7 @@ explains each rule.
 
 | Menu item | Shortcut | Does |
 |-----------|----------|------|
-| Map > Choose Folders to Scan | Cmd-O | Scan folders or drives you pick |
+| Map > Choose Folders to Scan | Cmd-O | Scan folders or drives you pick, with or without the stores and the home folder |
 | Map > Scan Usual Locations | | Go back to the stores and the home folder |
 | Map > Rescan | Cmd-R | Scan again and redraw the map |
 | Map > Reload Page | Shift-Cmd-R | Redraw the page without scanning |

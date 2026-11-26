@@ -180,8 +180,14 @@ def _parser() -> argparse.ArgumentParser:
     what.add_argument(
         "--no-defaults", action="store_true", help="scan only the given paths, not the known stores"
     )
-    what.add_argument(
+    sweeping = what.add_mutually_exclusive_group()
+    sweeping.add_argument(
         "--no-sweep", action="store_true", help="do not sweep the home directory for loose models"
+    )
+    sweeping.add_argument(
+        "--sweep",
+        action="store_true",
+        help="sweep the home directory too, even when PATHs or --only are given",
     )
     what.add_argument(
         "--exclude",
@@ -290,7 +296,7 @@ def _scan(args: argparse.Namespace, ctx: Context) -> Scan:
         paths=args.paths,
         only=args.only.split(",") if args.only else None,
         defaults=not args.no_defaults,
-        sweep=False if args.no_sweep else None,
+        sweep=False if args.no_sweep else True if args.sweep else None,
         excludes=args.exclude,
         min_size=args.min_size,
         max_depth=args.max_depth,
@@ -482,12 +488,17 @@ def main(
         return _remove(args, ctx, out, ask)
     if args.no_defaults and not args.paths and not getattr(args, "from_json", None):
         parser.error("--no-defaults needs at least one PATH to scan")
+    if args.no_defaults and args.sweep:
+        # The sweep is part of the default scan; the scanner runs it only then.
+        parser.error("--sweep cannot go with --no-defaults")
     if args.command == "serve" and args.redact:
         parser.error("--redact is for sharing a map; serve shows this machine to its owner")
     if args.command in ("list", "map", "serve") and args.from_json:
         # An inventory is read as it is. It does not say what the home
         # directory was, so it cannot be redacted here, only when it is made.
-        scanning = args.paths or args.only or args.no_sweep or args.exclude or args.redact
+        scanning = (
+            args.paths or args.only or args.no_sweep or args.sweep or args.exclude or args.redact
+        )
         if scanning or args.max_depth is not None:
             parser.error("--from-json reads an inventory as it is: give no PATH or scan options")
         try:

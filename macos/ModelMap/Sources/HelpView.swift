@@ -20,9 +20,11 @@ struct HelpView: View {
                 }
                 HelpSection(title: "Choosing what to scan") {
                     Text("By default the app reads every model store it knows and sweeps your home folder. To scan an external drive or another folder, choose **Map > Choose Folders to Scan** (Cmd-O).")
-                    Bullet("**Also read the usual model stores** checked: the stores and the folders you chose.")
-                    Bullet("Unchecked: only the folders you chose.")
-                    Text("Choosing folders turns off the sweep of your home folder. The window's title shows what is scanned, and the choice is remembered. **Map > Scan Usual Locations** goes back to the default.")
+                    Text("The **Scan** menu at the bottom of the panel says what to scan with them:")
+                    Bullet("**These folders, the model stores and the home folder**: the default scan plus your folders.")
+                    Bullet("**These folders and the model stores**: without the sweep of your home folder.")
+                    Bullet("**Only these folders**: nothing else.")
+                    Text("The window's title shows what is scanned, and the choice is remembered. **Map > Scan Usual Locations** goes back to the default.")
                         .foregroundStyle(.secondary)
                 }
                 HelpSection(title: "Removing a model") {

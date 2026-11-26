@@ -14,7 +14,7 @@ A scan has three parts, run in this order:
 2. Any paths you name.
 3. A sweep of your home folder, five levels deep, for model files the
    stores do not hold. The sweep runs only when you name no path and no
-   store (`--only`).
+   store (`--only`), unless you add `--sweep`.
 
 ### The stores
 

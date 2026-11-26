@@ -8,7 +8,8 @@ render the same everywhere.
 
 Writes ``assets/modelmap_logo``, ``_icon`` and ``_banner`` as SVG and PNG,
 ``assets/favicon.png``, ``docs/assets/logo.png``, ``favicon.png`` and
-``banner.png`` for the docs site, and ``src/modelmap/icon.svg``, which the map page embeds.
+``banner.png`` for the docs site, ``src/modelmap/icon.svg``, which the map page embeds, and the
+Mac app's icon set in ``macos/ModelMap/Assets.xcassets/AppIcon.appiconset``.
 
 Usage::
 
@@ -24,6 +25,7 @@ to the browser binary if it is not at the default macOS path. For example::
 
 import argparse
 import importlib.util
+import json
 import shutil
 import subprocess
 import sys
@@ -31,7 +33,7 @@ import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parent.parent
 AT_BUILD = ROOT.parent / "art_techno" / "docs" / "brand" / "build.py"
@@ -334,6 +336,41 @@ def sheet(out: Path) -> Path:
     return path
 
 
+def mac_icons(icon_png: Path, dest: Path) -> None:
+    """The macOS app icon set: the icon cut to its 45-degree frame, at 824 px
+    on a transparent 1024 canvas as Apple's icon grid has it, in every size.
+
+    :param icon_png: The icon rendered at 1024 px.
+    :param dest: The ``AppIcon.appiconset`` folder.
+    """
+    art = Image.open(icon_png).convert("RGBA").resize((824, 824), Image.LANCZOS)
+    cut = 824 * 8 / 64  # the frame's corner cut, on the 64-unit icon
+    mask = Image.new("L", (824, 824), 0)
+    ImageDraw.Draw(mask).polygon(
+        [(cut, 0), (824 - cut, 0), (824, cut), (824, 824 - cut),
+         (824 - cut, 824), (cut, 824), (0, 824 - cut), (0, cut)],
+        fill=255,
+    )  # fmt: skip
+    master = Image.new("RGBA", (1024, 1024), (0, 0, 0, 0))
+    master.paste(art, (100, 100), mask)
+    dest.mkdir(parents=True, exist_ok=True)
+    images = []
+    for points in (16, 32, 128, 256, 512):
+        for scale in (1, 2):
+            name = f"icon_{points}x{points}{'@2x' if scale == 2 else ''}.png"
+            master.resize((points * scale,) * 2, Image.LANCZOS).save(dest / name, optimize=True)
+            images.append(
+                {
+                    "idiom": "mac",
+                    "size": f"{points}x{points}",
+                    "scale": f"{scale}x",
+                    "filename": name,
+                }
+            )
+    contents = {"images": images, "info": {"author": "xcode", "version": 1}}
+    (dest / "Contents.json").write_text(json.dumps(contents, indent=2) + "\n")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--candidates", metavar="DIR", help="write every motif here to choose from")
@@ -366,6 +403,7 @@ def main() -> None:
         resized(icon_png, docs / "logo.png", 256)
         resized(icon_png, docs / "favicon.png", 32)
         shutil.copyfile(assets / "modelmap_banner.png", docs / "banner.png")
+        mac_icons(icon_png, ROOT / "macos" / "ModelMap" / "Assets.xcassets" / "AppIcon.appiconset")
     # The page embeds the icon, so it ships inside the package.
     shutil.copyfile(assets / "modelmap_icon.svg", ROOT / "src" / "modelmap" / "icon.svg")
 

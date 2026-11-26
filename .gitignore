@@ -26,3 +26,8 @@ uv.lock
 
 # Output of `mkdocs build`.
 /site/
+
+# The Mac app: the generated Xcode project, its build, and the staged Python.
+/macos/ModelMap.xcodeproj/
+/macos/build/
+/macos/Python/

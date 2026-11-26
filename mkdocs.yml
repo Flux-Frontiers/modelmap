@@ -55,6 +55,7 @@ nav:
   - Guide: guide.md
   - CLI reference: cli.md
   - Cheat sheet: cheatsheet.md
+  - Mac app: mac.md
   - API reference:
       - Scanning: api/scanner.md
       - Records: api/records.md

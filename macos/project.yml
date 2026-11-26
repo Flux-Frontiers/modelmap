@@ -1,0 +1,87 @@
+# XcodeGen spec for the modelmap Mac app.
+#   brew install xcodegen && cd macos && make run
+#
+# The app is a window around `modelmap serve`: it starts the server from a
+# Python bundled in Contents/Resources/Python (staged by `make python`) and
+# shows its page. Scanning, the map and removal stay in Python, in the code
+# the command line runs and the test suite covers.
+name: ModelMap
+options:
+  bundleIdPrefix: com.fluxfrontiers
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+
+targets:
+  ModelMap:
+    type: application
+    platform: macOS
+    sources:
+      - path: ModelMap/Sources
+        name: Sources
+      - ModelMap/Assets.xcassets
+      # A folder reference, so the interpreter keeps its layout:
+      # bin/python3 finds lib/libpython3.12.dylib relative to itself.
+      - path: Python
+        type: folder
+        buildPhase: resources
+    # No App Sandbox, unlike knowledge_press: modelmap reads model stores
+    # anywhere in the home folder and on other drives, runs `ollama`, `hf`
+    # and `trash`, and moves files to the Trash. A sandbox forbids all of it.
+    # That rules out the Mac App Store; this app is built locally.
+    entitlements:
+      path: ModelMap/ModelMap.entitlements
+      properties: {}
+    info:
+      path: ModelMap/Info.plist
+      properties:
+        CFBundleDisplayName: modelmap
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        LSMinimumSystemVersion: "14.0"
+        LSApplicationCategoryType: public.app-category.utilities
+        NSHumanReadableCopyright: "Copyright 2026 Eric G. Suchanek, PhD. BSD-3-Clause."
+        # macOS asks before an app reads these folders; the sweep of the home
+        # folder reaches them, and the prompt shows these reasons.
+        NSDesktopFolderUsageDescription: modelmap looks for model files on your Desktop so it can show how much space they take.
+        NSDocumentsFolderUsageDescription: modelmap looks for model files in Documents so it can show how much space they take.
+        NSDownloadsFolderUsageDescription: modelmap looks for downloaded model files in Downloads so it can show how much space they take.
+        # The page is served over plain HTTP on 127.0.0.1.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+    scheme:
+      testTargets:
+        - ModelMapTests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.fluxfrontiers.modelmap
+        # The executable is `modelmap`, so tests import it as `modelmap`.
+        PRODUCT_NAME: modelmap
+        # The Makefile passes the version from ../pyproject.toml.
+        MARKETING_VERSION: "0.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "6.0"
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_HARDENED_RUNTIME: YES
+        # Signed to run on this Mac only.
+        CODE_SIGN_IDENTITY: "-"
+        DEVELOPMENT_TEAM: ""
+      configs:
+        Release:
+          CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+
+  ModelMapTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - ModelMapTests
+    dependencies:
+      - target: ModelMap
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_IDENTITY: "-"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/modelmap.app/Contents/MacOS/modelmap"
+        BUNDLE_LOADER: "$(TEST_HOST)"

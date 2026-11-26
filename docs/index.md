@@ -40,6 +40,8 @@ modelmap providers              # where each store is looked for
   removing models, and the limits.
 - [CLI reference](cli.md): every command and option.
 - [Cheat sheet](cheatsheet.md): one page.
+- [Mac app](mac.md): the map in its own window, with help for removing
+  models from it.
 - [API reference](api/scanner.md): the Python modules, for using modelmap
   from code.
 

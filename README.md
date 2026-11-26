@@ -70,6 +70,7 @@ The documentation site is at
   serving it, removing models, and the limits.
 - [CLI reference](https://flux-frontiers.github.io/modelmap/cli/): every command and option.
 - [Cheat sheet](https://flux-frontiers.github.io/modelmap/cheatsheet/): one page.
+- [Mac app](https://flux-frontiers.github.io/modelmap/mac/): the map in its own window; built from `macos/`.
 - [API reference](https://flux-frontiers.github.io/modelmap/api/scanner/): the Python modules.
 
 ## Development

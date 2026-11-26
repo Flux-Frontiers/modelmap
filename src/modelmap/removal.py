@@ -18,19 +18,25 @@ the other store's file with it. A record whose files are used by another
 record is refused for the same reason.
 
 ``ollama rm`` has no store argument; it acts on the running Ollama. It is
-offered only for records in the Ollama provider's own store, and only for
-tags the running Ollama lists.
+offered only for records in the Ollama provider's own store, only when
+``OLLAMA_HOST`` names this machine, and only when the running Ollama lists
+every tag with the ID of the manifest in the scanned store: an Ollama using
+another models folder could share tag names and remove its own copy.
+Afterward the removal counts only if Ollama no longer lists the tags and
+the scanned store no longer holds them.
 """
 
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import os
 import shlex
 import shutil
 import subprocess
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
+from urllib.parse import urlsplit
 
 from modelmap.providers import ollama
 from modelmap.records import ModelRecord
@@ -51,6 +57,8 @@ class Plan:
     :param variants: Ollama tags removed with the record that share its
         weights but differ in their settings; some may have been made with
         ``ollama create``, and those settings cannot be pulled again.
+    :param store: For an ``ollama`` plan, the scanned store the tags must be
+        gone from afterward.
     """
 
     record: ModelRecord
@@ -59,6 +67,7 @@ class Plan:
     argv: list[str] = field(default_factory=list)
     paths: list[str] = field(default_factory=list)
     variants: list[str] = field(default_factory=list)
+    store: str = ""
 
 
 def _refuse(record: ModelRecord, note: str) -> Plan:
@@ -92,8 +101,31 @@ def trash_command(env: Mapping[str, str] | None) -> list[str] | None:
     return [gio, "trash"] if gio else None
 
 
-def _ollama_tags(env: Mapping[str, str] | None) -> set[str] | None:
-    """Tags the running Ollama lists, or None if it cannot be asked."""
+def _remote_ollama(env: Mapping[str, str] | None) -> str | None:
+    """``OLLAMA_HOST`` when it names another machine, else None.
+
+    ``ollama`` talks to the server at ``OLLAMA_HOST``; anything but this
+    machine (a loopback or unspecified address, ``localhost``) holds models
+    that were not scanned.
+    """
+    value = (env or {}).get("OLLAMA_HOST", "").strip()
+    if not value:
+        return None
+    try:
+        host = (urlsplit(value if "://" in value else f"http://{value}").hostname or "").lower()
+    except ValueError:
+        return value
+    if host in ("", "localhost"):
+        return None
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return value  # a host name other than localhost
+    return None if address.is_loopback or address.is_unspecified else value
+
+
+def _ollama_ids(env: Mapping[str, str] | None) -> dict[str, str] | None:
+    """Each tag the running Ollama lists, with its ID; None if it cannot be asked."""
     ollama = _which("ollama", env)
     if not ollama:
         return None
@@ -105,8 +137,8 @@ def _ollama_tags(env: Mapping[str, str] | None) -> set[str] | None:
         return None
     if result.returncode != 0:
         return None
-    lines = result.stdout.splitlines()[1:]
-    return {line.split()[0] for line in lines if line.strip()}
+    rows = [line.split() for line in result.stdout.splitlines()[1:]]
+    return {row[0]: row[1] if len(row) > 1 else "" for row in rows if row}
 
 
 def _inside(path: str, folder: str) -> bool:
@@ -246,11 +278,19 @@ def plan(
                 "`ollama rm` acts only on that one. Delete the store's folder yourself "
                 "if you no longer need it.",
             )
+        remote = _remote_ollama(env)
+        if remote:
+            return _refuse(
+                record,
+                f"OLLAMA_HOST is {remote}, another machine: `ollama rm` would act on the models "
+                "there, not on the ones scanned here.",
+            )
         tags = [name, *record.aliases]
         argv = ["ollama", "rm", *tags]
         own: list[str] = []
+        store = ""
         if check_disk:
-            listed = _ollama_tags(env)
+            listed = _ollama_ids(env)
             if listed is None:
                 return _refuse(record, "Ollama is not running, or the ollama command is not found.")
             missing = [tag for tag in tags if tag not in listed]
@@ -261,6 +301,15 @@ def plan(
                     "store than the one scanned.",
                 )
             store = next(s for s in ollama_stores if path == s or path.startswith(s + os.sep))
+            ids = ollama.manifest_ids(store)
+            foreign = [tag for tag in tags if listed[tag] != ids.get(tag)]
+            if foreign:
+                return _refuse(
+                    record,
+                    f"The running Ollama's {', '.join(foreign)} "
+                    f"{'is' if len(foreign) == 1 else 'are'} not the one in {store}: it uses "
+                    "another models folder, and `ollama rm` would remove its copy instead.",
+                )
             own = [tag for tag in tags if tag in ollama.variants(store, name) or tag == name]
             own = own if len(own) > 1 else []
         what = "every tag of these weights" if record.aliases else "the model"
@@ -270,7 +319,7 @@ def plan(
                 f" These tags share the weights but differ in their settings: {', '.join(own)}. "
                 "Settings made with `ollama create` are lost and cannot be pulled again."
             )
-        return Plan(record, "tool", note, argv, variants=own)
+        return Plan(record, "tool", note, argv, variants=own, store=store)
 
     shared = sorted({user for entry in record.file_list for user in entry.used_by})
     if shared and not any(entry.charged for entry in record.file_list):
@@ -381,8 +430,23 @@ def execute(plan: Plan, env: Mapping[str, str] | None) -> tuple[bool, str]:
         left = [path for path in plan.paths if os.path.lexists(path)]
         return (not left, f"Still there: {', '.join(left)}" if left else "")
     if plan.argv[0] == "ollama":
-        tags = _ollama_tags(env) or set()
-        left = [tag for tag in plan.argv[2:] if tag in tags]
-        return (not left, f"Ollama still lists {', '.join(left)}" if left else "")
+        removed = plan.argv[2:]
+        listed = _ollama_ids(env)
+        if listed is None:
+            # Not knowing is not success: the page must not say "Removed".
+            return False, (
+                "Ollama could not be asked afterward whether the tags are gone. "
+                "Scan again to see what is left."
+            )
+        left = [tag for tag in removed if tag in listed]
+        if left:
+            return False, f"Ollama still lists {', '.join(left)}"
+        kept = sorted(set(removed) & set(ollama.manifest_ids(plan.store))) if plan.store else []
+        if kept:
+            return False, (
+                f"The store at {plan.store} still holds {', '.join(kept)}: the Ollama that "
+                "answered uses another models folder."
+            )
+        return True, ""
     gone = not os.path.lexists(plan.record.path)
     return (gone, "" if gone else f"Still there: {plan.record.path}")

@@ -54,6 +54,27 @@ repositories with `hf cache rm`, and moves anything else to the Trash. It
 shows every file or command first, asks, and refuses caches and files
 that another model also uses.
 
+## Mac app
+
+`macos/` builds **modelmap.app**: the same map in its own window, with a
+Remove button per model, a Map menu to rescan or choose the folders and
+drives to scan, a server log, and built-in help. It runs `modelmap serve`
+from a Python bundled inside the app, so the Mac needs nothing else
+installed, and it reads your login shell's settings, so stores moved by
+`HF_HOME` or `OLLAMA_MODELS` are found.
+
+For now it is built from a clone (Xcode, XcodeGen, uv and Poetry):
+
+```bash
+cd macos && make run
+```
+
+It needs macOS 15 or later on Apple silicon. See the
+[Mac app page](https://flux-frontiers.github.io/modelmap/mac/) for what it
+does and how to use it.
+
+## Other machines
+
 To map a machine you cannot reach, ask its owner for an inventory:
 
 ```bash

@@ -18,11 +18,33 @@ for item in "$@"; do
 done
 """
 
-_OLLAMA = """#!/bin/sh
+_OLLAMA = r"""#!/bin/sh
+# The tags the daemon knows are lines of $FAKE_TAGS. Like Ollama, `list`
+# shows each tag's ID, the first 12 hex digits of its manifest's sha256, and
+# `rm` deletes the manifest, both in the store at $FAKE_OLLAMA_STORE.
+manifest() {
+  name="${1%:*}"; tag="${1##*:}"
+  case "$name" in
+    */*/*) repo="$name" ;;
+    */*) repo="registry.ollama.ai/$name" ;;
+    *) repo="registry.ollama.ai/library/$name" ;;
+  esac
+  for tree in manifests-v2 manifests; do
+    file="$FAKE_OLLAMA_STORE/$tree/$repo/$tag"
+    [ -n "$FAKE_OLLAMA_STORE" ] && [ -f "$file" ] && { echo "$file"; return; }
+  done
+}
+digest() {
+  if [ -x /usr/bin/sha256sum ]; then /usr/bin/sha256sum "$1"; else /usr/bin/shasum -a 256 "$1"; fi     | /usr/bin/cut -c1-12
+}
 case "$1" in
   list)
     echo "NAME ID SIZE MODIFIED"
-    while read -r tag; do echo "$tag abc 1GB now"; done < "$FAKE_TAGS"
+    while read -r tag; do
+      file="$(manifest "$tag")"
+      if [ -n "$file" ]; then id="$(digest "$file")"; else id=000000000000; fi
+      echo "$tag $id 1GB now"
+    done < "$FAKE_TAGS"
     ;;
   rm)
     shift
@@ -30,6 +52,8 @@ case "$1" in
       /usr/bin/grep -qxF "$tag" "$FAKE_TAGS" || { echo "model '$tag' not found" >&2; exit 1; }
       /usr/bin/grep -vxF "$tag" "$FAKE_TAGS" > "$FAKE_TAGS.new"
       /bin/mv "$FAKE_TAGS.new" "$FAKE_TAGS"
+      file="$(manifest "$tag")"
+      if [ -n "$file" ]; then /bin/rm -f "$file"; fi
     done
     ;;
 esac
@@ -53,6 +77,8 @@ class Tools:
     bin: Path
     trash: Path
     tags: Path
+    #: The Ollama store the fake daemon serves; None serves none.
+    ollama_store: Path | None = None
 
     def env(self, *names: str) -> dict[str, str]:
         """An environment whose PATH holds only the named programs."""
@@ -62,12 +88,21 @@ class Tools:
             link = chosen / name
             if not link.exists():
                 link.symlink_to(self.bin / name)
-        return {"PATH": str(chosen), "FAKE_TRASH": str(self.trash), "FAKE_TAGS": str(self.tags)}
+        env = {"PATH": str(chosen), "FAKE_TRASH": str(self.trash), "FAKE_TAGS": str(self.tags)}
+        if self.ollama_store is not None:
+            env["FAKE_OLLAMA_STORE"] = str(self.ollama_store)
+        return env
 
 
-def install(root: Path, tags: list[str]) -> Tools:
-    """Write the stand-ins under ``root``."""
-    tools = Tools(bin=root / "bin", trash=root / "Trash", tags=root / "ollama-tags")
+def install(root: Path, tags: list[str], ollama_store: Path | None = None) -> Tools:
+    """Write the stand-ins under ``root``.
+
+    :param tags: The tags the fake Ollama daemon knows.
+    :param ollama_store: The store it serves; its manifests give the IDs.
+    """
+    tools = Tools(
+        bin=root / "bin", trash=root / "Trash", tags=root / "ollama-tags", ollama_store=ollama_store
+    )
     tools.bin.mkdir(parents=True)
     tools.trash.mkdir()
     tools.tags.write_text("".join(f"{tag}\n" for tag in tags))

@@ -20,7 +20,7 @@ make run
 
 `make run` builds `macos/build/Build/Products/Release/modelmap.app` and
 opens it. Drag it to Applications to keep it. The build is for Apple
-silicon, needs macOS 14 or later, and is signed to run on the Mac that
+silicon, needs macOS 15 or later, and is signed to run on the Mac that
 built it.
 
 ## Using it

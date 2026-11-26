@@ -20,8 +20,9 @@ from tests.test_provider_ollama import IMAGE, Store
 
 
 @pytest.fixture
-def tools(tmp_path: Path) -> Tools:
-    return install(tmp_path / "tools", ["tiny:1b", "tiny:1b-4k", "other:latest"])
+def tools(tmp_path: Path, machine: FakeMachine) -> Tools:
+    store = Path(os.path.realpath(machine.ollama_store))
+    return install(tmp_path / "tools", ["tiny:1b", "tiny:1b-4k", "other:latest"], store)
 
 
 def _ctx(machine: FakeMachine, env: dict[str, str]) -> Context:
@@ -224,6 +225,7 @@ def test_ollama_tags_that_are_only_names_need_nothing_extra(tmp_path: Path, tool
             "manifests", f"registry.ollama.ai/library/qwen3/{tag}", {"layers": [weights, template]}
         )
     tools.tags.write_text("qwen3:8b\nqwen3:latest\n")
+    tools.ollama_store = store.root.resolve()  # the daemon serves this store
     env = {**tools.env("ollama"), "OLLAMA_MODELS": str(store.root)}
     ctx = Context(home=tmp_path, env=env, platform="darwin")
     records = {r.name: r for r in scan(ctx).records}
@@ -347,3 +349,64 @@ def test_a_failing_tool_is_reported(machine: FakeMachine, tools: Tools) -> None:
     tools.tags.write_text("other:latest\n")  # gone between plan and run
     done, problem = execute(step, ctx.env)
     assert not done and "not found" in problem
+
+
+# ------------------------------------------- which Ollama, and did it go
+
+
+def test_an_ollama_serving_another_store_is_refused(
+    machine: FakeMachine, tools: Tools, tmp_path: Path
+) -> None:
+    # Same tag names, other manifests: the Ollama that answers does not own
+    # the store that was scanned, so `ollama rm` would remove its copy.
+    tools.ollama_store = tmp_path / "elsewhere"
+    ctx, records = _records(machine, tools.env("ollama"))
+    step = plan(records["ollama:tiny:1b"], _live(machine), env=ctx.env)
+    assert step.action == "refuse"
+    assert "another models folder" in step.note
+
+
+@pytest.mark.parametrize(
+    "host",
+    ["gpu-box:11434", "http://10.0.0.5:11434", "https://models.example.com", "[fd00::5]:11434"],
+)
+def test_a_remote_ollama_host_is_refused(machine: FakeMachine, tools: Tools, host: str) -> None:
+    ctx, records = _records(machine, {**tools.env("ollama"), "OLLAMA_HOST": host})
+    step = plan(records["ollama:tiny:1b"], _live(machine), env=ctx.env)
+    assert step.action == "refuse"
+    assert "OLLAMA_HOST" in step.note
+
+
+@pytest.mark.parametrize(
+    "host", ["", "127.0.0.1", "localhost:11434", "http://127.0.0.1:11434", "0.0.0.0", "[::1]:11434"]
+)
+def test_a_local_ollama_host_is_fine(machine: FakeMachine, tools: Tools, host: str) -> None:
+    ctx, records = _records(machine, {**tools.env("ollama"), "OLLAMA_HOST": host})
+    assert plan(records["ollama:tiny:1b"], _live(machine), env=ctx.env).action == "tool"
+
+
+def test_removal_is_not_confirmed_when_ollama_cannot_be_asked(
+    machine: FakeMachine, tools: Tools
+) -> None:
+    ctx, records = _records(machine, tools.env("ollama"))
+    step = plan(records["ollama:tiny:1b"], _live(machine), env=ctx.env)
+    assert step.action == "tool"
+    # The daemon removes, then cannot answer `ollama list`.
+    fake = tools.bin / "ollama"
+    fake.write_text(fake.read_text().replace("  list)\n", "  list)\n    exit 1\n", 1))
+    done, problem = execute(step, ctx.env)
+    assert not done
+    assert "could not be asked" in problem
+
+
+def test_removal_is_not_confirmed_while_the_scanned_store_still_holds_it(
+    machine: FakeMachine, tools: Tools
+) -> None:
+    ctx, records = _records(machine, tools.env("ollama"))
+    step = plan(records["ollama:tiny:1b"], _live(machine), env=ctx.env)
+    # A daemon that drops the tags but whose rm leaves this store alone: it
+    # removed some other copy.
+    elsewhere = {k: v for k, v in ctx.env.items() if k != "FAKE_OLLAMA_STORE"}
+    done, problem = execute(step, elsewhere)
+    assert not done
+    assert "still holds" in problem

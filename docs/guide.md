@@ -150,7 +150,11 @@ How each kind of entry is removed:
   When those tags differ in their settings, for example a longer context
   made with `ollama create`, the plan names them, and with `--yes` each
   must be named on the command line. `ollama rm` acts on the Ollama that
-  is running, so modelmap refuses a copy of an Ollama store kept elsewhere.
+  is running, so modelmap refuses a copy of an Ollama store kept elsewhere,
+  an `OLLAMA_HOST` that names another machine, and an Ollama whose tags
+  have the same names but other manifests (it uses another models folder).
+  A removal counts only when Ollama no longer lists the tags and the
+  scanned store no longer holds them.
 - **Hugging Face cache**: with `hf cache rm`, which the `hf` command
   provides.
 - **Everything else**: moved to the Trash (`trash` on macOS, `trash` or

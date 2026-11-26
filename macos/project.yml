@@ -8,8 +8,10 @@
 name: ModelMap
 options:
   bundleIdPrefix: com.fluxfrontiers
+  # 15.0: the app moves files to the Trash with /usr/bin/trash, which first
+  # appeared in macOS 15 (trash(8)); on 14 every such removal is refused.
   deploymentTarget:
-    macOS: "14.0"
+    macOS: "15.0"
   createIntermediateGroups: true
 
 targets:
@@ -38,7 +40,7 @@ targets:
         CFBundleDisplayName: modelmap
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
-        LSMinimumSystemVersion: "14.0"
+        LSMinimumSystemVersion: "15.0"
         LSApplicationCategoryType: public.app-category.utilities
         NSHumanReadableCopyright: "Copyright 2026 Eric G. Suchanek, PhD. BSD-3-Clause."
         # macOS asks before an app reads these folders; the sweep of the home

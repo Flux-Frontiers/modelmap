@@ -18,6 +18,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--only` are given, which otherwise turn it off. Not with
   `--no-defaults`.
 
+### Fixed
+
+- **Ollama removal reported success it could not confirm.** When
+  `ollama list` failed after `ollama rm`, the removal counted as done. It
+  now counts only when Ollama answers and no longer lists the tags, and
+  the scanned store no longer holds their manifests.
+- **Ollama removal could act on another store.** Matching tag names was
+  not proof that the running Ollama owns the scanned store. Each tag's ID
+  from `ollama list` must now match the sha256 of the scanned manifest,
+  and an `OLLAMA_HOST` that names another machine is refused.
+- **Mac app on macOS 14.** `/usr/bin/trash` first appeared in macOS 15, so
+  every Trash removal was refused on 14. The app now requires macOS 15.
+
 ## [0.2.0] - 2026-11-25
 
 ### Added

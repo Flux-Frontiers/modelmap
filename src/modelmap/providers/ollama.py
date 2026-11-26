@@ -24,6 +24,7 @@ map shows one tile per model actually on disk.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -147,6 +148,35 @@ def _describe(store: str, layers: list[dict[str, Any]]) -> tuple[Description, st
         return Description(format="safetensors"), None
     kind = sniff(present[0]) if present else None
     return Description(format=kind or "unknown"), None
+
+
+def manifest_ids(store: str) -> dict[str, str]:
+    """The ID ``ollama list`` shows for each tag in a store.
+
+    Ollama's ID is the first 12 hex digits of the sha256 of the tag's
+    manifest file (checked against ``ollama list`` on this Mac's store). Two
+    stores that share tag names have different IDs unless their manifests
+    are the same byte for byte.
+
+    :param store: Resolved Ollama models directory.
+    """
+    ids: dict[str, str] = {}
+    for tree in _MANIFEST_TREES:  # the tree Ollama reads first wins
+        base = os.path.join(store, tree)
+        for dirpath, _, files in os.walk(base):
+            for file in files:
+                if file.startswith("."):
+                    continue
+                path = os.path.join(dirpath, file)
+                name = tag_name(tuple(os.path.relpath(path, base).split(os.sep)))
+                if name in ids:
+                    continue
+                try:
+                    with open(path, "rb") as fh:
+                        ids[name] = hashlib.sha256(fh.read()).hexdigest()[:12]
+                except OSError:
+                    continue
+    return ids
 
 
 def variants(store: str, tag: str) -> list[str]:

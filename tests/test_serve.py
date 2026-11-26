@@ -355,8 +355,9 @@ def test_serve_usage_errors(
 
 
 @pytest.fixture
-def tools(tmp_path: Path) -> Tools:
-    return install(tmp_path / "tools", ["tiny:1b", "tiny:1b-4k", "other:latest"])
+def tools(tmp_path: Path, machine: FakeMachine) -> Tools:
+    store = Path(os.path.realpath(machine.ollama_store))
+    return install(tmp_path / "tools", ["tiny:1b", "tiny:1b-4k", "other:latest"], store)
 
 
 @pytest.fixture

@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Flux-Frontiers/modelmap/main/assets/modelmap_banner.png" alt="modelmap" width="720"/>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Flux-Frontiers/modelmap/main/assets/modelmap_banner.png">
+    <img src="https://raw.githubusercontent.com/Flux-Frontiers/modelmap/main/assets/modelmap_banner_paper.png" alt="modelmap" width="720"/>
+  </picture>
 </p>
 
 [![CI](https://github.com/Flux-Frontiers/modelmap/actions/workflows/ci.yml/badge.svg)](https://github.com/Flux-Frontiers/modelmap/actions/workflows/ci.yml)

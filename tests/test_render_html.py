@@ -10,9 +10,10 @@ from pathlib import Path
 import pytest
 
 from modelmap import __version__
+from modelmap.palette import contrast
 from modelmap.providers.base import Context
 from modelmap.records import FileEntry, ModelRecord, Scan
-from modelmap.render_html import GROUPINGS, HOME_PAGE, group_view, record_view, render_html
+from modelmap.render_html import BRAND, GROUPINGS, HOME_PAGE, group_view, record_view, render_html
 from modelmap.scanner import Options, redact, scan
 from tests.fakemachine import FakeMachine
 from tests.test_render_svg import small_scan
@@ -283,7 +284,19 @@ def test_the_banner_names_the_tool_its_version_and_home() -> None:
     assert "MODELMAP" in banner
     assert f"v{__version__}" in banner
     assert f'href="{HOME_PAGE}"' in banner and "Flux-Frontiers" in banner
-    assert '<svg class="logo" aria-hidden="true"' in banner and "<title>" not in banner
+    # Both icons: the obsidian one for dark surroundings, the paper one for light.
+    assert banner.count('<svg class="logo ') == 2 and "<title>" not in banner
+    assert 'class="logo logo-dark"' in banner and 'class="logo logo-paper"' in banner
     assert 'rel="icon" href="data:image/svg+xml;base64,' in html
     # Still nothing loaded from the network: the only external URL is a link.
     assert re.findall(r'(?:src|href)="(https?:[^"]+)"', html) == [HOME_PAGE]
+
+
+@pytest.mark.parametrize("mode", ["light", "dark"])
+def test_the_banner_is_readable_in_both_modes(mode: str) -> None:
+    ink = BRAND[mode]
+    assert contrast(ink["name"], ink["ground"]) >= 3  # the large name
+    for role in ("tag", "text", "link"):
+        assert contrast(ink[role], ink["ground"]) >= 4.5, role
+    css = render_html(small_scan())
+    assert f"--brand-ground:{ink['ground']}" in css

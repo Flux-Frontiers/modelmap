@@ -1,4 +1,5 @@
-![modelmap](assets/banner.png)
+![modelmap](assets/banner_paper.png#only-light)
+![modelmap](assets/banner.png#only-dark)
 
 # modelmap
 

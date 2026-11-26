@@ -46,6 +46,32 @@ HOME_PAGE = "https://github.com/Flux-Frontiers/modelmap"
 TAGLINE = "WHERE THE WEIGHTS LIVE"
 #: The Art Techno icon that ``scripts/build_logo.py`` writes.
 _ICON = resources.files("modelmap").joinpath("icon.svg").read_text(encoding="utf-8")
+#: Its paper version, for the banner in light surroundings.
+_ICON_PAPER = resources.files("modelmap").joinpath("icon_paper.svg").read_text(encoding="utf-8")
+
+#: The banner's inks. Dark is the obsidian original; light is its paper
+#: version (Art Techno STYLE.md, paper exception): Silkscreen ground, iron
+#: name and text, deep copper frame, part line and link.
+BRAND = {
+    "light": {
+        "ground": "#EDE6D3",
+        "edge": "#8F4F24",
+        "name": "#151B18",
+        "tag": "#8F4F24",
+        "text": "#151B18",
+        "link": "#8F4F24",
+        "focus": "#1F6652",
+    },
+    "dark": {
+        "ground": "#0B100E",
+        "edge": "#D4AF5A",
+        "name": "#D4AF5A",
+        "tag": "#7FBFA8",
+        "text": "#EDE6D3",
+        "link": "#D4AF5A",
+        "focus": "#7FBFA8",
+    },
+}
 GROUPINGS = {"provider": "Store", "format": "Format", "family": "Family", "kind": "Kind"}
 
 
@@ -464,6 +490,7 @@ def _colors() -> str:
             f"--text2:{palette.TEXT_SECONDARY[mode]}",
             f"--line:{'#e1e0d9' if mode == 'light' else '#2c2c2a'}",
             f"--warn:{'#a13a00' if mode == 'light' else '#f0a070'}",
+            *(f"--brand-{role}:{ink}" for role, ink in BRAND[mode].items()),
         ]
         for name in [*palette.PROVIDER_COLORS, "other"]:
             color = palette.fill(name, mode)
@@ -499,7 +526,7 @@ input[type=search]{font:inherit;padding:6px 10px;border:1px solid var(--line);bo
 background:var(--surface);color:var(--text);min-width:0;width:14em}
 #crumbs{display:flex;flex-wrap:wrap;gap:4px;align-items:center;min-height:28px;margin-bottom:8px}
 #crumbs .sep{color:var(--text2)}
-.layout{display:grid;grid-template-columns:minmax(0,min(100%,calc(100vh - var(--map-top, 233px) - 32px))) minmax(0,1fr);
+.layout{display:grid;grid-template-columns:minmax(0,min(100%,max(280px,calc(100vh - var(--map-top, 233px) - 32px)))) minmax(0,1fr);
 gap:24px;align-items:start}
 @media (max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}.map{max-width:max(320px,calc(100vh - var(--map-top, 233px) - 32px))}}
 .map{position:relative;background:var(--surface);border-radius:6px}
@@ -670,27 +697,43 @@ _JS = """
 # below keeps the page's. Gold, mint and silkscreen on obsidian are each
 # above 7:1.
 _BRAND_CSS = """
-.brand{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;background:#0B100E;
-color:#EDE6D3;border:1px solid #D4AF5A;border-radius:10px;padding:10px 14px;margin-bottom:16px}
+.brand{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;background:var(--brand-ground);
+color:var(--brand-text);border:1px solid var(--brand-edge);border-radius:10px;padding:10px 14px;
+margin-bottom:16px}
 .brand .logo{width:44px;height:44px;flex:none}
-.brand-name{font-weight:600;font-size:20px;line-height:1;letter-spacing:.24em;color:#D4AF5A}
-.brand-tag{font:500 10.5px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.28em;color:#7FBFA8;
-margin-top:6px}
+.brand-name{font-weight:600;font-size:20px;line-height:1;letter-spacing:.24em;color:var(--brand-name)}
+.brand-tag{font:500 10.5px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.28em;
+color:var(--brand-tag);margin-top:6px}
 .brand-meta{margin-left:auto;display:flex;gap:14px;align-items:center;
 font:12px/1 ui-monospace,Menlo,Consolas,monospace}
-.brand-meta a{color:#D4AF5A;text-underline-offset:3px}
-.brand-meta a:focus-visible{outline:2px solid #7FBFA8;outline-offset:2px}
+.brand-meta a{color:var(--brand-link);text-underline-offset:3px}
+.brand-meta a:focus-visible{outline:2px solid var(--brand-focus);outline-offset:2px}
+.brand .logo-dark{display:none}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .brand .logo-dark{display:block}
+:root:not([data-theme=light]) .brand .logo-paper{display:none}}
+:root[data-theme=dark] .brand .logo-dark{display:block}
+:root[data-theme=dark] .brand .logo-paper{display:none}
 """
 
 
-def _banner() -> list[str]:
-    """The Flux-Frontiers banner: icon, name, tagline, version and a link home."""
-    head, _, rest = _ICON.partition("<title>")
+def _inline_icon(svg: str, kind: str) -> str:
+    head, _, rest = svg.partition("<title>")
     icon = head + rest.partition("</title>")[2]
-    icon = icon.replace("<svg ", '<svg class="logo" aria-hidden="true" focusable="false" ', 1)
+    return icon.replace(
+        "<svg ", f'<svg class="logo logo-{kind}" aria-hidden="true" focusable="false" ', 1
+    ).strip()
+
+
+def _banner() -> list[str]:
+    """The Flux-Frontiers banner: icon, name, tagline, version and a link home.
+
+    It follows the page's theme: the obsidian original in dark mode, its paper
+    version in light mode, with the icon to match.
+    """
     return [
         '<div class="brand">',
-        icon.strip(),
+        _inline_icon(_ICON, "dark"),
+        _inline_icon(_ICON_PAPER, "paper"),
         f'<div><div class="brand-name">MODELMAP</div><div class="brand-tag">{TAGLINE}</div></div>',
         f'<div class="brand-meta"><span>v{_xml(__version__)}</span>'
         f'<a href="{HOME_PAGE}" rel="noopener noreferrer">Flux-Frontiers</a></div>',

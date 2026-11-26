@@ -8,7 +8,9 @@ render the same everywhere.
 
 Writes ``assets/modelmap_logo``, ``_icon`` and ``_banner`` as SVG and PNG,
 ``assets/favicon.png``, ``docs/assets/logo.png``, ``favicon.png`` and
-``banner.png`` for the docs site, ``src/modelmap/icon.svg``, which the map page embeds, and the
+``banner.png`` for the docs site, the paper (light) banner and icon as
+``assets/modelmap_banner_paper`` and ``_icon_paper`` with copies in
+``docs/assets`` and ``src/modelmap``, ``src/modelmap/icon.svg``, which the map page embeds, and the
 Mac app's icon set in ``macos/ModelMap/Assets.xcassets/AppIcon.appiconset``.
 
 Usage::
@@ -30,7 +32,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 from PIL import Image, ImageDraw
@@ -71,6 +74,37 @@ CHOSEN: str | None = "floorplan"
 # Every motif is drawn on a 512 field, centered on (256, 212), the space
 # above the name.
 CX, CY = 256, 212
+
+
+# Ink roles. On obsidian the frame and name are gold and the part line mint;
+# paper() swaps them for the paper inks.
+FRAME, NAME_INK, PART_INK = GOLD, GOLD, MINT
+
+# The paper version: the same drawing recolored for light surroundings, under
+# the paper exception in art_techno/docs/STYLE.md (mapping C, chosen by EGS
+# 2026-11-26): Silkscreen ground, pale-stone panels, deep gold and deep copper
+# traces, a deep copper frame and part line, and the name in iron.
+IRON, STONE, DEEP_GOLD, DEEP_COPPER = "#151B18", "#D9D0BA", "#8A6A1E", "#8F4F24"
+
+
+@contextmanager
+def paper() -> Iterator[None]:
+    """Draw in the paper inks inside the ``with`` block."""
+    names = ("OBSIDIAN", "PANEL", "GOLD", "COPPER", "FRAME", "NAME_INK", "PART_INK")
+    saved = {name: globals()[name] for name in names}
+    globals().update(
+        OBSIDIAN=SILK,
+        PANEL=STONE,
+        GOLD=DEEP_GOLD,
+        COPPER=DEEP_COPPER,
+        FRAME=DEEP_COPPER,
+        NAME_INK=IRON,
+        PART_INK=DEEP_COPPER,
+    )
+    try:
+        yield
+    finally:
+        globals().update(saved)
 
 
 def rect(
@@ -223,8 +257,8 @@ MOTIFS: dict[str, tuple[str, Callable[[], str], Callable[[], str]]] = {
 def frame(w: float, h: float, inset: float, c: float, heavy: float) -> str:
     """Double frame with 45-degree corners and a green diamond at each corner."""
     out = [
-        f'<path d="{clipped_rect(inset, inset, w - 2 * inset, h - 2 * inset, c)}" fill="none" stroke="{GOLD}" stroke-width="{f(heavy)}"/>',
-        f'<path d="{clipped_rect(inset * 1.9, inset * 1.9, w - 3.8 * inset, h - 3.8 * inset, c * 0.75)}" fill="none" stroke="{GOLD}" stroke-width="{f(heavy * 0.4)}" stroke-opacity=".6"/>',
+        f'<path d="{clipped_rect(inset, inset, w - 2 * inset, h - 2 * inset, c)}" fill="none" stroke="{FRAME}" stroke-width="{f(heavy)}"/>',
+        f'<path d="{clipped_rect(inset * 1.9, inset * 1.9, w - 3.8 * inset, h - 3.8 * inset, c * 0.75)}" fill="none" stroke="{FRAME}" stroke-width="{f(heavy * 0.4)}" stroke-opacity=".6"/>',
     ]
     d = inset * 1.45 + c * 0.4375
     for cx, cy in ((d, d), (w - d, d), (d, h - d), (w - d, h - d)):
@@ -243,14 +277,14 @@ def svg(w: int, h: int, title: str, body: str) -> str:
 def mark(motif: Callable[[], str], display, mono) -> str:
     """512 square mark: the motif, the name and the part line beneath."""
     body = frame(512, 512, 10, 26, 5) + motif()
-    body += display.path(NAME, 256, 430, 40, 0.2, "middle", GOLD)
-    body += mono.path(PART, 256, 462, 13.5, 0.3, "middle", MINT)
+    body += display.path(NAME, 256, 430, 40, 0.2, "middle", NAME_INK)
+    body += mono.path(PART, 256, 462, 13.5, 0.3, "middle", PART_INK)
     return svg(512, 512, "modelmap mark, Art Techno", body)
 
 
 def icon(small: Callable[[], str]) -> str:
     """64 icon: the reduced motif in one heavy frame, no lettering."""
-    body = f'<path d="{clipped_rect(2.5, 2.5, 59, 59, 7.5)}" fill="none" stroke="{GOLD}" stroke-width="3"/>'
+    body = f'<path d="{clipped_rect(2.5, 2.5, 59, 59, 7.5)}" fill="none" stroke="{FRAME}" stroke-width="3"/>'
     return svg(64, 64, "modelmap icon, Art Techno", body + small())
 
 
@@ -267,8 +301,8 @@ def banner(motif: Callable[[], str], display, mono) -> str:
     cap = display.cap * size / display.upm
     pcap = mono.cap * part / mono.upm
     base = (320 - (cap + gap + pcap)) / 2 + cap
-    body += display.path(NAME, cx, base, size, 0.2, "middle", GOLD)
-    body += mono.path(PART, cx, base + gap + pcap, part, 0.3, "middle", MINT)
+    body += display.path(NAME, cx, base, size, 0.2, "middle", NAME_INK)
+    body += mono.path(PART, cx, base + gap + pcap, part, 0.3, "middle", PART_INK)
     return svg(1280, 320, "modelmap banner, Art Techno", body)
 
 
@@ -406,6 +440,18 @@ def main() -> None:
         mac_icons(icon_png, ROOT / "macos" / "ModelMap" / "Assets.xcassets" / "AppIcon.appiconset")
     # The page embeds the icon, so it ships inside the package.
     shutil.copyfile(assets / "modelmap_icon.svg", ROOT / "src" / "modelmap" / "icon.svg")
+
+    # Paper versions, for light surroundings: the README in GitHub's light
+    # mode, the docs site's light scheme, and the page in a light theme.
+    _, motif, small = MOTIFS[CHOSEN]
+    with paper():
+        paper_banner = assets / "modelmap_banner_paper.svg"
+        paper_icon = assets / "modelmap_icon_paper.svg"
+        paper_banner.write_text(banner(motif, display, mono))
+        paper_icon.write_text(icon(small))
+    render(paper_banner, paper_banner.with_suffix(".png"), 2560, 640)
+    shutil.copyfile(paper_banner.with_suffix(".png"), ROOT / "docs" / "assets" / "banner_paper.png")
+    shutil.copyfile(paper_icon, ROOT / "src" / "modelmap" / "icon_paper.svg")
 
 
 if __name__ == "__main__":
